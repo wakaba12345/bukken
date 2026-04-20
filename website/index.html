@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bukken.io — 私たちは物件を売りません。だから本当のことしか言いません。</title>
+<meta name="description" content="物件URLを貼るか、間取り図をアップロードするだけ。AI×管理者視点で、仲介業者が絶対に言わない真実を分析します。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600&family=Noto+Sans+JP:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0f0f0e;
+  --ink-mid: #3a3a38;
+  --ink-soft: #888780;
+  --ink-faint: #c8c6c0;
+  --paper: #f7f6f2;
+  --paper-warm: #eeecea;
+  --blue: #1a4fa0;
+  --blue-light: #e8eef8;
+  --blue-mid: #3060b8;
+  --red-warn: #b02020;
+  --red-warn-bg: #faf0f0;
+  --green: #0f5c3a;
+  --green-bg: #eaf4ee;
+  --border: rgba(15,15,14,0.1);
+  --border-strong: rgba(15,15,14,0.2);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px;
+  height: 60px;
+  background: rgba(247,246,242,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 0.5px solid var(--border);
+}
+.nav-logo {
+  font-family: 'DM Mono', monospace;
+  font-size: 17px; font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.nav-logo span { color: var(--blue); }
+.nav-links { display: flex; gap: 32px; align-items: center; }
+.nav-links a {
+  font-size: 13px; color: var(--ink-mid);
+  text-decoration: none; letter-spacing: 0.01em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--ink); }
+.nav-cta {
+  font-size: 12px; font-weight: 500;
+  background: var(--ink); color: var(--paper) !important;
+  padding: 7px 18px; border-radius: 6px;
+  transition: opacity 0.2s !important;
+}
+.nav-cta:hover { opacity: 0.8; }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 100px 24px 60px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 100%, rgba(26,79,160,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.12em;
+  color: var(--ink-soft); text-transform: uppercase;
+  border: 0.5px solid var(--border-strong);
+  padding: 5px 14px; border-radius: 100px;
+  margin-bottom: 36px;
+  animation: fadeUp 0.6s ease both;
+}
+.hero-tag-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); flex-shrink: 0;
+}
+.hero-h1 {
+  font-family: 'Noto Serif JP', serif;
+  font-size: clamp(28px, 4.5vw, 52px);
+  font-weight: 300;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 780px;
+  margin-bottom: 12px;
+  animation: fadeUp 0.6s 0.1s ease both;
+}
+.hero-h1 em {
+  font-style: normal;
+  font-weight: 600;
+  position: relative;
+}
+.hero-h1 em::after {
+  content: '';
+  position: absolute; bottom: 2px; left: 0; right: 0;
+  height: 2px; background: var(--blue); opacity: 0.4;
+}
+.hero-sub {
+  font-size: 14px; color: var(--ink-soft);
+  max-width: 480px; line-height: 1.8;
+  margin-bottom: 56px;
+  animation: fadeUp 0.6s 0.2s ease both;
+}
+
+/* ── MAIN TOOL ── */
+.tool-card {
+  width: 100%; max-width: 680px;
+  background: #fff;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 40px rgba(15,15,14,0.06), 0 1px 4px rgba(15,15,14,0.04);
+  animation: fadeUp 0.6s 0.3s ease both;
+}
+.tool-tabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--border);
+}
+.tool-tab {
+  flex: 1; padding: 14px 20px;
+  font-size: 13px; font-weight: 500;
+  color: var(--ink-soft);
+  background: none; border: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.tool-tab.active {
+  color: var(--ink);
+}
+.tool-tab.active::after {
+  content: '';
+  position: absolute; bottom: -1px; left: 20px; right: 20px;
+  height: 1.5px; background: var(--ink);
+}
+.tool-body { padding: 24px; }
+
+/* URL INPUT */
+.url-input-wrap {
+  display: flex; gap: 8px;
+  background: var(--paper); border: 0.5px solid var(--border-strong);
+  border-radius: 10px; padding: 4px 4px 4px 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.url-input-wrap:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26,79,160,0.08);
+}
+.url-input {
+  flex: 1; background: none; border: none; outline: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px; color: var(--ink);
+  min-width: 0;
+}
+.url-input::placeholder { color: var(--ink-faint); }
+.url-submit {
+  background: var(--ink); color: var(--paper);
+  border: none; border-radius: 7px;
+  padding: 9px 20px; font-size: 13px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: opacity 0.2s;
+}
+.url-submit:hover { opacity: 0.8; }
+.url-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.url-hint {
+  display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap;
+}
+.url-hint-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--ink-soft);
+}
+.url-hint-item::before {
+  content: '✓'; color: var(--blue); font-size: 10px;
+}
+
+/* UPLOAD */
+.upload-zone {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 36px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+.upload-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.upload-icon {
+  width: 40px; height: 40px; margin: 0 auto 12px;
+  border-radius: 10px; background: var(--paper-warm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.upload-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: var(--ink-soft); }
+.upload-formats {
+  display: flex; gap: 6px; justify-content: center;
+  margin-top: 14px; flex-wrap: wrap;
+}
+.upload-format-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--ink-soft);
+  background: var(--paper-warm);
+  padding: 2px 8px; border-radius: 4px;
+}
+
+/* PANEL DIVIDER */
+.tool-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 0; color: var(--ink-faint); font-size: 12px;
+}
+.tool-divider::before, .tool-divider::after {
+  content: ''; flex: 1; height: 0.5px; background: var(--border);
+}
+
+/* ADDRESS INPUT (fallback) */
+.addr-input {
+  width: 100%; padding: 11px 14px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 8px; background: var(--paper);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 13px; color: var(--ink); outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.addr-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26,79,160,0.08);
+}
+.addr-input::placeholder { color: var(--ink-faint); }
+
+/* PROCESSING STATE */
+.processing {
+  display: none;
+  text-align: center; padding: 24px 0;
+}
+.processing.show { display: block; }
+.processing-steps { text-align: left; margin-top: 16px; }
+.step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; font-size: 13px; color: var(--ink-soft);
+  transition: color 0.3s;
+}
+.step.active { color: var(--ink); }
+.step.done { color: var(--green); }
+.step-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border-strong); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.step.active .step-dot { background: var(--blue); animation: pulse 1s infinite; }
+.step.done .step-dot { background: var(--green); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── RESULT PREVIEW (truncated) ── */
+.result-wrap {
+  display: none;
+  padding: 0 24px 24px;
+}
+.result-wrap.show { display: block; }
+
+.result-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; padding: 16px 0;
+  border-bottom: 0.5px solid var(--border);
+  margin-bottom: 16px;
+}
+.result-property-name {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 16px; font-weight: 400;
+  color: var(--ink); line-height: 1.4;
+}
+.result-address {
+  font-size: 11px; color: var(--ink-soft);
+  font-family: 'DM Mono', monospace;
+  margin-top: 3px;
+}
+.result-share-btn {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--blue);
+  background: var(--blue-light);
+  border: none; border-radius: 6px;
+  padding: 5px 10px; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+
+.result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.result-card {
+  background: var(--paper); border-radius: 8px;
+  padding: 10px 12px;
+}
+.result-card-label { font-size: 10px; color: var(--ink-soft); margin-bottom: 3px; letter-spacing: 0.04em; }
+.result-card-value { font-size: 14px; font-weight: 500; color: var(--ink); }
+.result-card-value.green { color: var(--green); }
+.result-card-value.warn { color: var(--red-warn); }
+
+/* BLURRED SECTION */
+.blur-section {
+  position: relative;
+  border-radius: 8px; overflow: hidden;
+  margin-bottom: 12px;
+}
+.blur-content {
+  filter: blur(5px);
+  user-select: none; pointer-events: none;
+  background: var(--paper); padding: 14px;
+  border-radius: 8px;
+}
+.blur-lines { display: flex; flex-direction: column; gap: 6px; }
+.blur-line {
+  height: 9px; border-radius: 4px;
+  background: var(--border-strong);
+}
+.blur-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px;
+  background: rgba(247,246,242,0.7);
+  backdrop-filter: blur(2px);
+}
+.blur-lock { font-size: 20px; }
+.blur-cta {
+  font-size: 12px; font-weight: 500;
+  background: var(--ink); color: var(--paper);
+  border: none; border-radius: 6px;
+  padding: 7px 16px; cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.blur-sub { font-size: 11px; color: var(--ink-soft); }
+
+/* OSHIMA RESULT */
+.oshima-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.oshima-row.clear { background: var(--green-bg); color: var(--green); }
+.oshima-row.warn { background: var(--red-warn-bg); color: var(--red-warn); }
+.oshima-icon { font-size: 15px; flex-shrink: 0; }
+
+/* PLUGIN CTA */
+.plugin-banner {
+  margin: 16px 0 0;
+  background: var(--ink);
+  border-radius: 10px; padding: 16px;
+  display: flex; align-items: center; gap: 14px;
+}
+.plugin-icon {
+  width: 40px; height: 40px; border-radius: 9px;
+  background: rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.plugin-text { flex: 1; }
+.plugin-text p:first-child {
+  font-size: 13px; font-weight: 500; color: #fff; margin-bottom: 2px;
+}
+.plugin-text p:last-child { font-size: 11px; color: rgba(255,255,255,0.5); }
+.plugin-install {
+  background: rgba(255,255,255,0.15);
+  border: 0.5px solid rgba(255,255,255,0.2);
+  color: #fff; border-radius: 6px;
+  padding: 7px 14px; font-size: 12px;
+  cursor: pointer; white-space: nowrap;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: background 0.2s;
+}
+.plugin-install:hover { background: rgba(255,255,255,0.25); }
+
+/* ── FEATURES ── */
+.features {
+  padding: 120px 24px;
+  max-width: 1000px; margin: 0 auto;
+}
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.12em;
+  color: var(--ink-soft); text-transform: uppercase;
+  margin-bottom: 48px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-label::after {
+  content: ''; flex: 1; height: 0.5px; background: var(--border);
+}
+.features-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.feature-cell {
+  padding: 32px 28px;
+  border: 0.5px solid var(--border);
+  position: relative;
+}
+.feature-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; color: var(--ink-faint);
+  margin-bottom: 20px; letter-spacing: 0.06em;
+}
+.feature-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 17px; font-weight: 400;
+  line-height: 1.5; margin-bottom: 10px;
+}
+.feature-desc { font-size: 13px; color: var(--ink-soft); line-height: 1.75; }
+.feature-tag {
+  display: inline-block; margin-top: 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: 0.06em;
+  color: var(--blue);
+  background: var(--blue-light);
+  padding: 3px 9px; border-radius: 4px;
+}
+
+/* ── BRAND STATEMENT ── */
+.brand {
+  padding: 100px 24px;
+  background: var(--ink);
+  text-align: center;
+}
+.brand-ja {
+  font-family: 'Noto Serif JP', serif;
+  font-size: clamp(20px, 3vw, 34px);
+  font-weight: 300; color: #fff;
+  line-height: 1.6; letter-spacing: 0.02em;
+  max-width: 720px; margin: 0 auto 16px;
+}
+.brand-zh {
+  font-family: 'Noto Serif JP', serif;
+  font-size: clamp(13px, 1.8vw, 18px);
+  color: rgba(255,255,255,0.35);
+  font-weight: 300; letter-spacing: 0.04em;
+}
+.brand-rule {
+  width: 1px; height: 60px;
+  background: rgba(255,255,255,0.15);
+  margin: 48px auto;
+}
+.brand-sub {
+  font-size: 13px; color: rgba(255,255,255,0.45);
+  max-width: 560px; margin: 0 auto;
+  line-height: 1.8;
+}
+
+/* ── FLOW ── */
+.flow {
+  padding: 100px 24px;
+  max-width: 800px; margin: 0 auto;
+}
+.flow-steps { display: flex; flex-direction: column; gap: 0; }
+.flow-step {
+  display: grid; grid-template-columns: 48px 1fr;
+  gap: 20px; align-items: start;
+  position: relative; padding-bottom: 40px;
+}
+.flow-step:last-child { padding-bottom: 0; }
+.flow-step-left { text-align: center; }
+.flow-step-num {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--ink); color: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  margin: 0 auto 0;
+}
+.flow-step-line {
+  width: 0.5px; height: calc(100% - 36px);
+  background: var(--border-strong);
+  margin: 6px auto 0;
+}
+.flow-step:last-child .flow-step-line { display: none; }
+.flow-step-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 17px; font-weight: 400;
+  margin-bottom: 6px; padding-top: 6px;
+}
+.flow-step-desc { font-size: 13px; color: var(--ink-soft); line-height: 1.75; }
+.flow-step-note {
+  display: inline-block; margin-top: 10px;
+  font-size: 11px; font-family: 'DM Mono', monospace;
+  color: var(--blue); background: var(--blue-light);
+  padding: 3px 9px; border-radius: 4px;
+}
+
+/* ── FOOTER ── */
+footer {
+  border-top: 0.5px solid var(--border);
+  padding: 40px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.footer-logo {
+  font-family: 'DM Mono', monospace;
+  font-size: 15px; color: var(--ink-mid);
+}
+.footer-logo span { color: var(--blue); }
+.footer-links { display: flex; gap: 24px; }
+.footer-links a {
+  font-size: 12px; color: var(--ink-soft);
+  text-decoration: none;
+}
+.footer-corp { font-size: 11px; color: var(--ink-faint); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeUp 0.5s ease both; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 720px) {
+  nav { padding: 0 20px; }
+  .nav-links a:not(.nav-cta) { display: none; }
+  .features-grid { grid-template-columns: 1fr; }
+  footer { flex-direction: column; gap: 20px; text-align: center; }
+  .result-grid { grid-template-columns: 1fr; }
+}
+
+/* URL COPIED TOAST */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper);
+  font-size: 13px; padding: 10px 20px; border-radius: 8px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 999;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">bukken<span>.io</span></a>
+  <div class="nav-links">
+    <a href="#how">使い方</a>
+    <a href="#features">機能</a>
+    <a href="/pricing">料金</a>
+    <a href="#" class="nav-cta">外掛を入れる</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-tag">
+    <span class="hero-tag-dot"></span>
+    J&amp;E 株式会社 — 不動産管理者が作ったツール
+  </div>
+  <h1 class="hero-h1">
+    私たちは物件を売りません。<br>
+    管理するだけです。だから<em>本当のこと</em>しか言いません。
+  </h1>
+  <p class="hero-sub">
+    物件URLを貼るか、間取り図・謄本をアップロードするだけ。<br>
+    仲介業者が絶対に言わない情報を、AI×管理者視点で分析します。
+  </p>
+
+  <!-- TOOL CARD -->
+  <div class="tool-card" id="tool">
+    <div class="tool-tabs">
+      <button class="tool-tab active" onclick="switchTab('url', this)">URLを貼る</button>
+      <button class="tool-tab" onclick="switchTab('upload', this)">図面・謄本を上げる</button>
+      <button class="tool-tab" onclick="switchTab('address', this)">住所を入れる</button>
+    </div>
+
+    <!-- URL TAB -->
+    <div class="tool-body" id="tab-url">
+      <div class="url-input-wrap">
+        <input class="url-input" type="url" id="url-input"
+          placeholder="https://suumo.jp/ms/chuko/..." />
+        <button class="url-submit" onclick="startAnalysis('url')">分析する →</button>
+      </div>
+      <div class="url-hint">
+        <span class="url-hint-item">SUUMO</span>
+        <span class="url-hint-item">athome</span>
+        <span class="url-hint-item">HOME'S</span>
+        <span class="url-hint-item">不動産ジャパン</span>
+      </div>
+    </div>
+
+    <!-- UPLOAD TAB -->
+    <div class="tool-body" id="tab-upload" style="display:none">
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic" multiple
+          onchange="handleFileSelect(this)" />
+        <div class="upload-icon">📄</div>
+        <p class="upload-title">ここにファイルをドロップ</p>
+        <p class="upload-sub">または クリックして選択</p>
+        <div class="upload-formats">
+          <span class="upload-format-tag">PDF</span>
+          <span class="upload-format-tag">JPG</span>
+          <span class="upload-format-tag">PNG</span>
+          <span class="upload-format-tag">HEIC</span>
+        </div>
+      </div>
+      <div class="tool-divider">住所が読めない場合</div>
+      <input class="addr-input" type="text"
+        placeholder="マンション名や住所のヒントを入力（任意）" />
+      <div style="margin-top:12px">
+        <button class="url-submit" style="width:100%" onclick="startAnalysis('upload')">
+          OCR → 物件特定 → 分析する →
+        </button>
+      </div>
+    </div>
+
+    <!-- ADDRESS TAB -->
+    <div class="tool-body" id="tab-address" style="display:none">
+      <input class="addr-input" type="text" id="addr-input"
+        placeholder="東京都渋谷区恵比寿2-8-1 ○○マンション 305号室" />
+      <div style="margin-top:8px">
+        <button class="url-submit" style="width:100%;margin-top:8px"
+          onclick="startAnalysis('address')">物件を特定して分析 →</button>
+      </div>
+      <div class="url-hint" style="margin-top:12px">
+        <span class="url-hint-item">建物名があると精度UP</span>
+        <span class="url-hint-item">部屋番号あると完全一致</span>
+      </div>
+    </div>
+
+    <!-- PROCESSING -->
+    <div class="processing" id="processing">
+      <div class="processing-steps" id="steps">
+        <div class="step" id="step-1"><span class="step-dot"></span>物件情報を取得中</div>
+        <div class="step" id="step-2"><span class="step-dot"></span>クロスプラットフォーム比較</div>
+        <div class="step" id="step-3"><span class="step-dot"></span>大島てる・災害リスク照合</div>
+        <div class="step" id="step-4"><span class="step-dot"></span>AIレポート生成中</div>
+      </div>
+    </div>
+
+    <!-- RESULT (truncated for free) -->
+    <div class="result-wrap" id="result">
+      <div class="result-header">
+        <div>
+          <div class="result-property-name" id="r-name">恵比寿パークマンション 305号室</div>
+          <div class="result-address" id="r-addr">東京都渋谷区恵比寿2-8-1</div>
+        </div>
+        <button class="result-share-btn" onclick="copyShareUrl()">
+          🔗 シェア
+        </button>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="result-card-label">最安値プラットフォーム</div>
+          <div class="result-card-value green" id="r-lowest">HOME'S で ¥820,000 安い</div>
+        </div>
+        <div class="result-card">
+          <div class="result-card-label">地震リスク（30年）</div>
+          <div class="result-card-value" id="r-quake">震度6強 82%</div>
+        </div>
+        <div class="result-card">
+          <div class="result-card-label">推定賃料</div>
+          <div class="result-card-value" id="r-rent">¥198,000 / 月</div>
+        </div>
+        <div class="result-card">
+          <div class="result-card-label">推定利回り</div>
+          <div class="result-card-value" id="r-yield">3.78 %</div>
+        </div>
+      </div>
+
+      <!-- OSHIMA -->
+      <div class="oshima-row clear" id="r-oshima">
+        <span class="oshima-icon">✅</span>
+        大島てる：この物件の登録なし
+      </div>
+
+      <!-- BLURRED: AI分析 -->
+      <div class="blur-section">
+        <div class="blur-content">
+          <div class="blur-lines">
+            <div class="blur-line" style="width:90%"></div>
+            <div class="blur-line" style="width:75%"></div>
+            <div class="blur-line" style="width:85%"></div>
+            <div class="blur-line" style="width:60%"></div>
+            <div class="blur-line" style="width:80%"></div>
+          </div>
+        </div>
+        <div class="blur-overlay">
+          <span class="blur-lock">🔒</span>
+          <button class="blur-cta" onclick="window.location='/pricing'">
+            AI分析レポートを見る（10pt）
+          </button>
+          <span class="blur-sub">無料登録でポイント付与</span>
+        </div>
+      </div>
+
+      <!-- PLUGIN CTA -->
+      <div class="plugin-banner">
+        <div class="plugin-icon">🔌</div>
+        <div class="plugin-text">
+          <p>Chrome拡張を入れると、物件ページで自動分析</p>
+          <p>SUUMO・athomeを開くだけで即座に表示</p>
+        </div>
+        <button class="plugin-install">無料で入れる</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRAND STATEMENT -->
+<section class="brand">
+  <p class="brand-ja">
+    私たちは物件を売りません。管理するだけです。<br>
+    だから本当のことしか言いません。
+  </p>
+  <div class="brand-rule"></div>
+  <p class="brand-zh">我們不賣房，我們管房。所以我們只告訴你真相。</p>
+  <p class="brand-sub" style="margin-top:32px">
+    仲介の収入は成交から来ます。成交したら、彼らは去ります。<br>
+    私たちは残ります——空室、修繕、管理組合、その全てと向き合います。<br>
+    その経験が、このツールの判断ロジックになっています。
+  </p>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="flow" id="how">
+  <div class="section-label">使い方 — How it works</div>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="flow-step-num">01</div>
+        <div class="flow-step-line"></div>
+      </div>
+      <div>
+        <div class="flow-step-title">URLを貼る、または図面をアップ</div>
+        <div class="flow-step-desc">SUUMO・athome・HOME'SのURLをそのまま貼るか、間取り図・謄本のPDF・画像をアップロード。OCRで物件情報を自動読み取り、地番・建物名・階数まで特定します。</div>
+        <span class="flow-step-note">対応: SUUMO / athome / HOME'S / 不動産ジャパン / 画像・PDF</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="flow-step-num">02</div>
+        <div class="flow-step-line"></div>
+      </div>
+      <div>
+        <div class="flow-step-title">物件を正確に特定・クロス比較</div>
+        <div class="flow-step-desc">住所・面積・屋齢を複数プラットフォームで照合し、同一物件を確認。価格差が出ている場合は実際の差額を表示します。</div>
+        <span class="flow-step-note">不動産情報は正確さが命。交叉比対なしに分析しません。</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="flow-step-num">03</div>
+        <div class="flow-step-line"></div>
+      </div>
+      <div>
+        <div class="flow-step-title">仲介が言わない情報を照合</div>
+        <div class="flow-step-desc">大島てる（事故物件）・J-SHIS（地震リスク）・国土交通省防災API（洪水・土砂）・J&amp;E管理実績データを照合。全て公式データソースから取得します。</div>
+        <span class="flow-step-note">事故物件は同棟・近隣まで範囲を広げて確認</span>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-left">
+        <div class="flow-step-num">04</div>
+        <div class="flow-step-line"></div>
+      </div>
+      <div>
+        <div class="flow-step-title">AIレポートと永久URLを生成</div>
+        <div class="flow-step-desc">分析結果は永久URLで保存され、シェア可能。無料版は基本情報を表示、深度レポートはポイントで解錠。</div>
+        <span class="flow-step-note">bukken.io/report/abc123 — SNSでシェアできます</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-label">機能 — What we check</div>
+  <div class="features-grid">
+    <div class="feature-cell">
+      <div class="feature-num">01</div>
+      <div class="feature-title">クロスプラットフォーム価格比較</div>
+      <div class="feature-desc">同一物件が複数サイトに掲載されている場合、実際の価格差を表示。どこが最安値かを即座に判定します。</div>
+      <span class="feature-tag">無料</span>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-num">02</div>
+      <div class="feature-title">事故物件チェック（大島てる）</div>
+      <div class="feature-desc">完全一致・同棟別室・近隣（一戸建て±2番地）の3段階で照合。仲介が告知しないケースも検出します。</div>
+      <span class="feature-tag">無料</span>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-num">03</div>
+      <div class="feature-title">災害リスク（公式データ）</div>
+      <div class="feature-desc">J-SHIS地震確率・洪水浸水想定・土砂災害・津波リスクを国土交通省APIから取得。全て一次データです。</div>
+      <span class="feature-tag">無料</span>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-num">04</div>
+      <div class="feature-title">AI分析レポート</div>
+      <div class="feature-desc">区域行情・推定賃料・投資スコア・メリット/デメリット・管理者アドバイスを生成。仲介では得られない管理視点を加えます。</div>
+      <span class="feature-tag">10pt</span>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-num">05</div>
+      <div class="feature-title">図面・謄本OCR解析</div>
+      <div class="feature-desc">間取り図・謄本・販売図面をアップロードするだけで物件情報を自動抽出。住所が不完全でも複数データソースで交叉比対して特定します。</div>
+      <span class="feature-tag">10pt</span>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-num">06</div>
+      <div class="feature-title">Chrome拡張で自動分析</div>
+      <div class="feature-desc">SUUMOやathomeを開くだけで、側边栏に自動で分析を表示。物件ページを開いた瞬間に判定が始まります。</div>
+      <span class="feature-tag">拡張機能</span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">bukken<span>.io</span></div>
+  <div class="footer-links">
+    <a href="/privacy">プライバシー</a>
+    <a href="/terms">利用規約</a>
+    <a href="/pricing">料金</a>
+    <a href="/cdn-cgi/l/email-protection#5831363e37183a2d33333d36763137">お問い合わせ</a>
+  </div>
+  <div class="footer-corp">J&amp;E 株式会社</div>
+</footer>
+
+<div class="toast" id="toast">URLをコピーしました</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ── Tab switching ──
+function switchTab(name, btn) {
+  ['url','upload','address'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tool-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── Drag and drop ──
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+function handleFileSelect(input) { handleFiles(input.files); }
+function handleFiles(files) {
+  if (!files.length) return;
+  const names = Array.from(files).map(f => f.name).join(', ');
+  zone.querySelector('.upload-title').textContent = names;
+  zone.querySelector('.upload-sub').textContent = `${files.length}ファイル選択済み`;
+  zone.querySelector('.upload-icon').textContent = '✅';
+}
+
+// ── Analysis flow ──
+function startAnalysis(type) {
+  const proc = document.getElementById('processing');
+  proc.style.display = 'block';
+  proc.classList.add('show');
+  document.getElementById('result').classList.remove('show');
+
+  // Simulate steps
+  const steps = ['step-1','step-2','step-3','step-4'];
+  const delays = [0, 1200, 2400, 3600];
+  const doneTimes = [1100, 2300, 3500, 5000];
+
+  steps.forEach((id, i) => {
+    setTimeout(() => {
+      document.getElementById(id).classList.add('active');
+    }, delays[i]);
+    setTimeout(() => {
+      document.getElementById(id).classList.remove('active');
+      document.getElementById(id).classList.add('done');
+    }, doneTimes[i]);
+  });
+
+  // Show result
+  setTimeout(() => {
+    proc.style.display = 'none';
+    showResult();
+  }, 5400);
+}
+
+function showResult() {
+  const res = document.getElementById('result');
+  res.classList.add('show');
+  // Scroll to result
+  res.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Share URL ──
+function copyShareUrl() {
+  const url = 'https://bukken.io/report/sample-abc123';
+  navigator.clipboard.writeText(url).then(() => {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  });
+}
+
+// ── Scroll animations ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.animation = 'fadeUp 0.5s ease both';
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+docume

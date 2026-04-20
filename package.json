@@ -1,0 +1,16 @@
+{
+  "name": "bukken-io",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "extension",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:extension": "cd extension && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build:extension": "cd extension && npm run build",
+    "build:backend": "cd backend && npm run build"
+  }
+}

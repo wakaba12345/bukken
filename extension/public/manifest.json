@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "Bukken.io — 日本不動産アナライザー",
+  "version": "0.1.0",
+  "description": "日本の不動産物件をリアルタイムで分析。クロスプラットフォーム価格比較・AI分析レポート・災害リスク情報を提供します。",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://suumo.jp/*",
+    "https://www.athome.co.jp/*",
+    "https://www.homes.co.jp/*",
+    "https://realestate.yahoo.co.jp/*",
+    "https://www.rakumachi.jp/*",
+    "https://www.kenbiya.com/*",
+    "https://bukken.io/*",
+    "http://localhost/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://suumo.jp/ms/chuko/*",
+        "https://suumo.jp/ms/shinchiku/*",
+        "https://suumo.jp/jj/bukken/*",
+        "https://www.athome.co.jp/mansion/*",
+        "https://www.athome.co.jp/kodate/*",
+        "https://www.homes.co.jp/mansion/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

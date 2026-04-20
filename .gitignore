@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Plasmo / Extension build
+extension/.plasmo/
+extension/build/
+
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Logs
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
