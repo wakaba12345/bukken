@@ -8,6 +8,7 @@ import type {
   ZoningInfo,
   OfficialLandPrice,
 } from 'shared/types'
+import { computeAreaHealthScore } from './areaHealthScoreService'
 import { geocode } from '../lib/apis/geocode'
 import { getEarthquakeRisk } from '../lib/apis/jshis'
 import { getDisasterRisk, getZoning, getOfficialLandPrice } from '../lib/apis/reinfolib'
@@ -78,6 +79,14 @@ export async function generateReport(
   const foreignRes   = foreignResRes.status === 'fulfilled'    ? (foreignResRes.value ?? undefined) : undefined
   const employment   = employmentRes.status === 'fulfilled'    ? (employmentRes.value ?? undefined) : undefined
 
+  // ── 地域健康度スコア集計（Phase 1.6、prompt には注入しない） ─────────────
+  const areaHealthScore = computeAreaHealthScore({
+    demographics, popMove, construction, vacancy, foreignRes, employment,
+  })
+  if (process.env.NODE_ENV === 'development' && areaHealthScore) {
+    console.log('[reportService] areaHealthScore:', JSON.stringify(areaHealthScore, null, 2))
+  }
+
   // ── Claude API でレポート生成 ────────────────────────────────────────────
   const aiAnalysis = await generateAiAnalysis(property, type, disaster, market, transactions, zoning, landPrice, elevation, demographics, popMove, construction, vacancy, foreignRes, employment)
 
@@ -97,6 +106,7 @@ export async function generateReport(
     areaMarket: mergedMarket,
     zoning,
     officialLandPrice: landPrice,
+    areaHealthScore: areaHealthScore ?? undefined,
     aiAnalysis,
     generatedAt: new Date().toISOString(),
     pointsUsed: 0, // caller sets this

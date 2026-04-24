@@ -88,6 +88,24 @@ export interface AreaMarket {
   estimatedYield?: number   // 推定利回り (%)
 }
 
+export type AreaHealthGrade = 'A' | 'B' | 'C' | 'D' | 'F'
+export type AreaTrend = 'rising' | 'stable' | 'declining'
+
+export interface AreaHealthScore {
+  areaName: string
+  overallScore: number              // 0-100
+  grade: AreaHealthGrade
+  trend: AreaTrend
+  subScores: {
+    demand: number                  // 0-100 (popMove + population + foreignRes)
+    supply: number                  // 0-100 (vacancy + construction 反向)
+    purchasingPower: number         // 0-100 (employment)
+  }
+  keyInsights: string[]             // ポジティブ要因 2-5 条
+  riskFlags: string[]               // ネガティブ要因 / 警告 0-5 条
+  dataCompleteness: number          // 0-1（1 = 全 6 資料源あり）
+}
+
 export interface ZoningInfo {
   category: string                           // 用途地域名（例: 第一種低層住居専用地域）
   buildingCoverageRatio?: number             // 建蔽率 %
@@ -112,6 +130,7 @@ export interface ReportContent {
   areaMarket?: AreaMarket
   zoning?: ZoningInfo                        // deep_report のみ
   officialLandPrice?: OfficialLandPrice      // deep_report のみ
+  areaHealthScore?: AreaHealthScore          // e-Stat 多源集計
   aiAnalysis: {
     summary: string
     pros: string[]
