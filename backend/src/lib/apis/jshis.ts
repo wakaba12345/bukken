@@ -8,6 +8,13 @@
 
 const BASE_URL = 'https://www.j-shis.bosai.go.jp/map/api'
 
+// J-SHIS API は確率値を文字列 ("0.090534") で返すことがあるため、数値に正規化する
+function toNum(v: unknown): number {
+  if (v == null) return 0
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  return isFinite(n) ? n : 0
+}
+
 export interface EarthquakeRisk {
   prob30yr5Weak: number    // 30年以内 震度5弱以上の確率 (0-1)
   prob30yr5Strong: number  // 30年以内 震度5強以上の確率 (0-1)
@@ -28,7 +35,7 @@ export async function getEarthquakeRisk(
   try {
     // J-SHIS API: 確率論的地震動予測地図
     // version=2020, case=AVR (平均モデル), eqcode=ALL
-    const url = new URL(`${BASE_URL}/pshm/Y2020/AVR/ALL/meshinfo.json`)
+    const url = new URL(`${BASE_URL}/pshm/Y2020/AVR/TTL_MTTL/meshinfo.geojson`)
     url.searchParams.set('position', `${lng},${lat}`)
     url.searchParams.set('epsg', '4326')
 
@@ -55,10 +62,10 @@ export async function getEarthquakeRisk(
     if (!props) return null
 
     return {
-      prob30yr5Weak:   props['T30_I45_PS'] ?? 0,
-      prob30yr5Strong: props['T30_I50_PS'] ?? 0,
-      prob30yr6Weak:   props['T30_I55_PS'] ?? 0,
-      prob30yr6Strong: props['T30_I60_PS'] ?? 0,
+      prob30yr5Weak:   toNum(props['T30_I45_PS']),
+      prob30yr5Strong: toNum(props['T30_I50_PS']),
+      prob30yr6Weak:   toNum(props['T30_I55_PS']),
+      prob30yr6Strong: toNum(props['T30_I60_PS']),
       meshCode:        props['meshCode'] ?? '',
     }
   } catch (e) {
@@ -74,7 +81,7 @@ export async function getEarthquakeRiskByMeshCode(
   meshCode: string,
 ): Promise<EarthquakeRisk | null> {
   try {
-    const url = `${BASE_URL}/pshm/Y2020/AVR/ALL/meshinfo.json?meshcode=${meshCode}`
+    const url = `${BASE_URL}/pshm/Y2020/AVR/TTL_MTTL/meshinfo.geojson?meshcode=${meshCode}`
 
     const res = await fetch(url, {
       next: { revalidate: 2592000 },
@@ -87,10 +94,10 @@ export async function getEarthquakeRiskByMeshCode(
     if (!props) return null
 
     return {
-      prob30yr5Weak:   props['T30_I45_PS'] ?? 0,
-      prob30yr5Strong: props['T30_I50_PS'] ?? 0,
-      prob30yr6Weak:   props['T30_I55_PS'] ?? 0,
-      prob30yr6Strong: props['T30_I60_PS'] ?? 0,
+      prob30yr5Weak:   toNum(props['T30_I45_PS']),
+      prob30yr5Strong: toNum(props['T30_I50_PS']),
+      prob30yr6Weak:   toNum(props['T30_I55_PS']),
+      prob30yr6Strong: toNum(props['T30_I60_PS']),
       meshCode,
     }
   } catch (e) {
