@@ -547,8 +547,13 @@ function ReportView({ report, t }: {
           <div style={styles.riskGrid}>
             <RiskItem
               label={t("地震（30年）", "地震（30年）")}
-              value={`${(risk.earthquake30yr * 100).toFixed(0)}%`}
-              level={risk.earthquake30yr > 0.6 ? "high" : risk.earthquake30yr > 0.3 ? "mid" : "low"}
+              value={risk.earthquake30yr != null
+                ? `${(risk.earthquake30yr * 100).toFixed(0)}%`
+                : t("データなし", "資料無")}
+              level={risk.earthquake30yr == null ? "mid"
+                : risk.earthquake30yr > 0.6 ? "high"
+                : risk.earthquake30yr > 0.3 ? "mid"
+                : "low"}
             />
             <RiskItem
               label={t("洪水", "水災")}

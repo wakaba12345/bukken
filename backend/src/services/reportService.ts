@@ -111,8 +111,10 @@ async function fetchDisasterRisk(lat: number, lng: number): Promise<DisasterRisk
 
   const eq = earthquake.status === 'fulfilled' ? earthquake.value : null
   const rd = reinfoDisaster.status === 'fulfilled' ? reinfoDisaster.value : null
+  const anyApiOk = eq != null || rd != null
 
-  // リスクスコア算出 (0-100, 100=最安全)
+  // リスクスコア算出 (0-100, 100=最安全)。全 API 失敗時は undefined
+  // （score=100 を返すと AI が "最安全" と誤読する — Rule #4 違反）
   let score = 100
   if (eq?.prob30yr6Strong) score -= eq.prob30yr6Strong * 40
   if (rd?.floodRisk === 'high')      score -= 20
@@ -120,11 +122,11 @@ async function fetchDisasterRisk(lat: number, lng: number): Promise<DisasterRisk
   if (rd?.landslideRisk === 'high')  score -= 15
 
   return {
-    earthquake30yr: eq?.prob30yr6Strong ?? 0,
+    earthquake30yr: eq?.prob30yr6Strong,
     floodRisk: rd?.floodRisk ?? 'none',
     landslideRisk: rd?.landslideRisk ?? 'none',
     tsunamiRisk: rd?.tsunamiRisk ?? 'none',
-    overallScore: Math.max(0, Math.round(score)),
+    overallScore: anyApiOk ? Math.max(0, Math.round(score)) : undefined,
   }
 }
 
@@ -186,9 +188,13 @@ ${market ? `Area market data:
 - Price change 6m: ${market.priceChange6m > 0 ? '+' : ''}${market.priceChange6m.toFixed(1)}%` : ''}
 
 ${disaster ? `Disaster risk:
-- Earthquake (30yr 震度6強 probability): ${(disaster.earthquake30yr * 100).toFixed(1)}%
+${disaster.earthquake30yr != null
+  ? `- Earthquake (30yr 震度6強 probability): ${(disaster.earthquake30yr * 100).toFixed(1)}%`
+  : `- Earthquake (30yr 震度6強): データなし（J-SHIS API 取得失敗 — リスク不明、"ゼロ" と解釈してはならない）`}
 - Flood risk: ${disaster.floodRisk}
-- Overall safety score: ${disaster.overallScore}/100` : ''}
+${disaster.overallScore != null
+  ? `- Overall safety score: ${disaster.overallScore}/100`
+  : `- Overall safety score: データなし（全ハザード API 失敗のため計算不可）`}` : ''}
 
 ${elevation ? `Elevation (国土地理院):
 - Altitude: ${elevation.meters.toFixed(1)}m above sea level

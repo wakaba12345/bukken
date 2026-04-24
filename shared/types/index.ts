@@ -73,11 +73,11 @@ export const PLANS: Plan[] = [
 export type ReportType = 'quick_summary' | 'standard' | 'deep'
 
 export interface DisasterRisk {
-  earthquake30yr: number    // 30年以内震度6強以上確率 (0-1)
+  earthquake30yr?: number   // 30年以内震度6強以上確率 (0-1)；undefined = J-SHIS API 失敗／取得不可
   floodRisk: 'none' | 'low' | 'medium' | 'high' | 'very_high'
   landslideRisk: 'none' | 'low' | 'medium' | 'high'
   tsunamiRisk: 'none' | 'low' | 'medium' | 'high'
-  overallScore: number      // 0-100 (100 = safest)
+  overallScore?: number     // 0-100 (100 = safest)；undefined = 全ハザード API 失敗のため計算不可
 }
 
 export interface AreaMarket {
