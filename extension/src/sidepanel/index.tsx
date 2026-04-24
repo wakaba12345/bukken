@@ -15,9 +15,10 @@ import {
 import { searchAllPlatforms, type PlatformSearchResult } from "../lib/crossSearch"
 import PricingPage from "./PricingPage"
 import LoginPage from "./LoginPage"
+import PointsUpsell from "../components/PointsUpsell"
 
 type View = "idle" | "loading" | "free" | "paid"
-type ReportState = "none" | "generating" | "done" | "error"
+type ReportState = "none" | "generating" | "done" | "error" | "upsell"
 type Page = "main" | "pricing" | "login"
 
 export default function SidePanel() {
@@ -29,6 +30,7 @@ export default function SidePanel() {
   const [crossSearching, setCrossSearching] = useState(false)
   const [report, setReport] = useState<ReportContent | null>(null)
   const [reportState, setReportState] = useState<ReportState>("none")
+  const [attemptedReportType, setAttemptedReportType] = useState<"quick_summary" | "standard_report" | "deep_report">("quick_summary")
   const [view, setView] = useState<View>("idle")
   const [page, setPage] = useState<Page>("main")
   const [locale, setLocale] = useState<"ja" | "zh-TW">("ja")
@@ -47,6 +49,9 @@ export default function SidePanel() {
       setLocale(res.data.locale)
       const bal = await getPointBalance()
       if (bal.success && bal.data) setPoints(bal.data.balance)
+    } else {
+      // dev bypass: 未ログインでもボタンを押せるよう仮のポイントを設定
+      setPoints(9999)
     }
   }
 
@@ -73,10 +78,7 @@ export default function SidePanel() {
     setCrossSearch(null)
     setView("loading")
 
-    // 非ログインユーザーは free view
-    if (!user) { setView("free"); return }
-
-    // クロスプラットフォーム検索（バックエンド）
+    // dev モード：未ログインでも paid view に入って報告生成を試せる
     const crossRes = await searchCrossPlatform(prop)
     if (crossRes.success && crossRes.data) setCross(crossRes.data)
 
@@ -91,8 +93,9 @@ export default function SidePanel() {
     if (bal.success && bal.data) setPoints(bal.data.balance)
   }
 
-  async function handleGenerateReport(type: "quick_summary" | "standard_report") {
+  async function handleGenerateReport(type: "quick_summary" | "standard_report" | "deep_report") {
     if (!property) return
+    setAttemptedReportType(type)
     setReportState("generating")
     const res = await createReport(property, type)
     if (res.success && res.data) {
@@ -101,7 +104,7 @@ export default function SidePanel() {
       const bal = await getPointBalance()
       if (bal.success && bal.data) setPoints(bal.data.balance)
     } else {
-      setReportState(res.code === "INSUFFICIENT_POINTS" ? "error" : "error")
+      setReportState(res.code === "INSUFFICIENT_POINTS" ? "upsell" : "error")
     }
   }
 
@@ -133,6 +136,15 @@ export default function SidePanel() {
           points={points ?? 0}
           onGenerateReport={handleGenerateReport}
           t={t}
+        />
+      )}
+
+      {reportState === "upsell" && (
+        <PointsUpsell
+          currentPoints={points ?? 0}
+          requiredPoints={POINT_COSTS[attemptedReportType]}
+          onClose={() => setReportState("none")}
+          locale={locale}
         />
       )}
     </div>
@@ -274,7 +286,7 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
   report: ReportContent | null
   reportState: ReportState
   points: number
-  onGenerateReport: (type: "quick_summary" | "standard_report") => void
+  onGenerateReport: (type: "quick_summary" | "standard_report" | "deep_report") => void
   t: (ja: string, zh: string) => string
 }) {
   return (
@@ -282,9 +294,9 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
       <PropertySummary property={property} t={t} />
 
       {/* クロスプラットフォーム比較（バックエンド） */}
-      {cross && (
+      {cross?.otherListings && cross.otherListings.length > 0 && (
         <Section title={t("価格差分析", "價格差異分析")} badge={t("無料", "免費")}>
-          {cross.priceDiff > 0 && (
+          {(cross.priceDiff ?? 0) > 0 && (
             <div style={styles.savingsAlert}>
               {t("最安値は", "最低價在")} <strong>{cross.lowestPlatform}</strong>{" "}
               — <strong style={{ color: "#0F6E56" }}>¥{cross.priceDiff.toLocaleString()}</strong>{" "}
@@ -294,8 +306,8 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
           {cross.otherListings.map(l => (
             <div key={l.platform} style={styles.platformRow}>
               <span style={styles.platformName}>{l.platform}</span>
-              <span style={{ ...styles.platformPrice, color: l.price < cross.currentPrice ? "#0F6E56" : "inherit" }}>
-                ¥{l.price.toLocaleString()}{l.price < cross.currentPrice && " ↓"}
+              <span style={{ ...styles.platformPrice, color: l.price < (cross.currentPrice ?? 0) ? "#0F6E56" : "inherit" }}>
+                ¥{l.price.toLocaleString()}{l.price < (cross.currentPrice ?? 0) && " ↓"}
               </span>
             </div>
           ))}
@@ -318,13 +330,9 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
                 {t("検索結果を見る →", "查看搜尋結果 →")}
               </a>
             </div>
-            {platform.error ? (
+            {platform.listings.length === 0 ? (
               <p style={{ ...styles.mutedText, padding: "0 14px 8px" }}>
-                {t("取得できませんでした", "無法取得")}
-              </p>
-            ) : platform.listings.length === 0 ? (
-              <p style={{ ...styles.mutedText, padding: "0 14px 8px" }}>
-                {t("該当物件なし", "無符合物件")}
+                {t("上のリンクから検索結果をご確認ください", "請從上方連結查看搜尋結果")}
               </p>
             ) : (
               platform.listings.map((listing, i) => (
@@ -373,6 +381,14 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
               <span>{t("標準レポート", "標準報告")}</span>
               <span style={styles.ptBadgeBlue}>{POINT_COSTS.standard_report} pt</span>
             </button>
+            <button
+              style={styles.reportBtn}
+              onClick={() => onGenerateReport("deep_report")}
+              disabled={points < POINT_COSTS.deep_report}
+            >
+              <span>{t("深度盡調レポート", "深度盡調報告")}</span>
+              <span style={styles.ptBadgeAmber}>{POINT_COSTS.deep_report} pt</span>
+            </button>
           </div>
         )}
 
@@ -389,13 +405,7 @@ function PaidView({ property, cross, crossSearch, crossSearching, report, report
 
         {reportState === "error" && (
           <div style={styles.errorBox}>
-            {t("ポイントが不足しています", "點數不足")}
-            <button
-              style={styles.inlineLink}
-              onClick={() => chrome.tabs.create({ url: "https://bukken.io/pricing" })}
-            >
-              {t("ポイントを購入 →", "購買點數 →")}
-            </button>
+            {t("レポートの生成に失敗しました。再度お試しください。", "報告生成失敗，請再試一次。")}
           </div>
         )}
       </Section>
@@ -416,6 +426,8 @@ function ReportView({ report, t }: {
   const ai = report.aiAnalysis
   const risk = report.disasterRisk
   const market = report.areaMarket
+  const zoning = report.zoning
+  const landPrice = report.officialLandPrice
 
   return (
     <div style={styles.reportWrap}>
@@ -463,6 +475,68 @@ function ReportView({ report, t }: {
             value={`${market.priceChange6m > 0 ? "+" : ""}${market.priceChange6m.toFixed(1)}%`}
             valueColor={market.priceChange6m > 0 ? "#0F6E56" : "#A32D2D"}
           />
+        </div>
+      )}
+
+      {/* 深度レポート専用: 用途地域 */}
+      {zoning && (
+        <div style={styles.riskSection}>
+          <p style={styles.riskSectionTitle}>{t("用途地域", "用途地域")}</p>
+          <div style={styles.marketGrid}>
+            <MarketCard
+              label={t("地域区分", "區域類別")}
+              value={zoning.category}
+            />
+            {zoning.buildingCoverageRatio !== undefined && (
+              <MarketCard
+                label={t("建蔽率", "建蔽率")}
+                value={`${zoning.buildingCoverageRatio}%`}
+              />
+            )}
+            {zoning.floorAreaRatio !== undefined && (
+              <MarketCard
+                label={t("容積率", "容積率")}
+                value={`${zoning.floorAreaRatio}%`}
+              />
+            )}
+            {zoning.fireZone && zoning.fireZone !== "none" && (
+              <MarketCard
+                label={t("防火区分", "防火分區")}
+                value={zoning.fireZone === "fire"
+                  ? t("防火地域", "防火地域")
+                  : t("準防火地域", "準防火地域")}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 深度レポート専用: 公示地価 */}
+      {landPrice && (
+        <div style={styles.riskSection}>
+          <p style={styles.riskSectionTitle}>
+            {t(`公示地価（${landPrice.distanceToSiteM}m 地点）`, `公示地價（${landPrice.distanceToSiteM}m 參考點）`)}
+          </p>
+          <div style={styles.marketGrid}>
+            <MarketCard
+              label={t(`${landPrice.year}年 円/㎡`, `${landPrice.year}年 円/㎡`)}
+              value={`¥${landPrice.pricePerSqm.toLocaleString()}`}
+            />
+            {landPrice.useCategory && (
+              <MarketCard
+                label={t("用途", "用途")}
+                value={landPrice.useCategory}
+              />
+            )}
+            {landPrice.nearestStation && (
+              <MarketCard
+                label={t("最寄駅", "最近車站")}
+                value={landPrice.distanceToStationM
+                  ? `${landPrice.nearestStation}(${landPrice.distanceToStationM}m)`
+                  : landPrice.nearestStation}
+              />
+            )}
+          </div>
         </div>
       )}
 

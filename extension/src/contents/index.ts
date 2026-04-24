@@ -14,6 +14,7 @@ export const config: PlasmoCSConfig = {
     "https://www.homes.co.jp/chintai/*",
     "https://www.rakumachi.jp/syuuekibukken/*",
     "https://www.kenbiya.com/ar/*",
+    "https://www.kenbiya.com/pp*",  // pp3/pp4/pp5/... 全バージョン
   ],
   run_at: "document_idle",
 }
@@ -26,6 +27,7 @@ export const config: PlasmoCSConfig = {
     console.warn("[Bukken.io] パース失敗:", window.location.href)
     return
   }
+  console.log("[Bukken.io] Parsed property:", property)
 
   // Background に物件データを送信
   chrome.runtime.sendMessage({ type: "PROPERTY_DETECTED", payload: property })

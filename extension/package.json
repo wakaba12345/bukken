@@ -19,9 +19,7 @@
       "https://www.rakumachi.jp/*",
       "https://www.kenbiya.com/*",
       "https://bukken.io/*",
-      "http://localhost:3000/*",
-      "http://localhost:3002/*",
-      "http://localhost:3003/*"
+      "http://localhost:1010/*"
     ]
   },
   "dependencies": {

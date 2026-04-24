@@ -65,6 +65,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 })
 
+// ツールバーアイコンクリックでサイドパネルを開く
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.id) {
+    chrome.sidePanel.open({ tabId: tab.id }).catch(console.error)
+  }
+})
+
 // タブが閉じられたらクリーンアップ
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabPropertyMap.delete(tabId)

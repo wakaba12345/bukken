@@ -9,6 +9,7 @@ import type { PropertyData } from '../../../shared/types'
 export function parseKenbiya(): PropertyData | null {
   try {
     // ── 価格 ────────────────────────────────────────────────────────────────
+    // pp* 系は <dt>価格</dt><dd>…</dd> / ar 系は <th>価格</th><td>…</td>
     const priceEl =
       document.querySelector('.price-area .price') ||
       document.querySelector('.property-price') ||
@@ -16,10 +17,10 @@ export function parseKenbiya(): PropertyData | null {
       document.querySelector('.detail-price') ||
       (() => {
         let found: Element | null = null
-        document.querySelectorAll('th').forEach(th => {
-          const label = th.textContent?.trim() ?? ''
+        document.querySelectorAll('th, dt').forEach(el => {
+          const label = el.textContent?.trim() ?? ''
           if (/^(価格|販売価格|売買価格)$/.test(label) && !found) {
-            found = th.nextElementSibling
+            found = el.nextElementSibling
           }
         })
         return found
@@ -31,21 +32,12 @@ export function parseKenbiya(): PropertyData | null {
 
     // ── 住所 ────────────────────────────────────────────────────────────────
     let address = ''
-
-    document.querySelectorAll('th').forEach(th => {
-      const label = th.textContent?.trim() ?? ''
+    document.querySelectorAll('th, dt').forEach(el => {
+      const label = el.textContent?.trim() ?? ''
       if (/^(所在地|住所)$/.test(label) && !address) {
-        address = (th.nextElementSibling as HTMLElement)?.textContent?.trim() ?? ''
+        address = (el.nextElementSibling as HTMLElement)?.textContent?.trim() ?? ''
       }
     })
-
-    if (!address) {
-      document.querySelectorAll('dt').forEach(dt => {
-        if (/所在地|住所/.test(dt.textContent?.trim() ?? '') && !address) {
-          address = (dt.nextElementSibling as HTMLElement)?.textContent?.trim() ?? ''
-        }
-      })
-    }
 
     if (!address) {
       const addrEl =
@@ -57,12 +49,16 @@ export function parseKenbiya(): PropertyData | null {
     if (!address) return null
 
     // ── 面積 ────────────────────────────────────────────────────────────────
+    // 「104.63m²（31.65坪）」のように複数の数字が続くため、最初の数字だけを抽出。
+    // parseFloat を raw.replace(/[^0-9.]/g,'') に掛けると "104.6331.65" のように
+    // 複数の小数点が残って意図しない桁数の値になる。
     let area = 0
     ;[...document.querySelectorAll('th, dt')].forEach(el => {
       const label = el.textContent?.trim() ?? ''
       if (/専有面積|建物面積|延床面積|土地面積|敷地面積/.test(label) && area === 0) {
         const raw = (el.nextElementSibling as HTMLElement)?.textContent ?? ''
-        area = parseFloat(raw.replace(/[^0-9.]/g, '')) || 0
+        const m = raw.match(/(\d+(?:\.\d+)?)/)
+        area = m ? parseFloat(m[1]) : 0
       }
     })
 

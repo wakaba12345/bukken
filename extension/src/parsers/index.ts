@@ -53,7 +53,11 @@ export function isPropertyPage(): boolean {
     return path.includes('/syuuekibukken/')
   }
   if (platform === 'kenbiya') {
-    return path.includes('/ar/cl/') || path.includes('/ar/ns/')
+    return (
+      path.includes('/ar/cl/') ||
+      path.includes('/ar/ns/') ||
+      /^\/pp\d+\//.test(path)    // 新 URL 体系 /pp3/m/..., /pp4/... 等
+    )
   }
   return false
 }

@@ -8,94 +8,75 @@ import type { PropertyData } from '../../../shared/types'
  */
 export function parseSuumo(): PropertyData | null {
   try {
-    // ── 価格 ────────────────────────────────────────────────────────────────
-    const priceEl =
-      document.querySelector('.detailbody-mainprice') ||          // 中古マンション
-      document.querySelector('[class*="price"] .num') ||
-      document.querySelector('.bukkenPrice') ||
-      document.querySelector('[data-testid="price"]')
+    // SUUMO の物件詳細は <th><div class="fl">ラベル</div></th><td>値</td> 構造
+    // ラベル → 値 の map を一度だけ作る
+    const tableMap = new Map<string, string>()
+    document.querySelectorAll('th').forEach(th => {
+      const label = (th.querySelector('.fl')?.textContent ?? th.textContent ?? '').trim()
+      const next = th.nextElementSibling as HTMLElement | null
+      if (!label || !next || next.tagName !== 'TD') return
+      if (!tableMap.has(label)) tableMap.set(label, (next.textContent ?? '').trim())
+    })
 
-    const priceText = priceEl?.textContent?.trim() ?? ''
+    const get = (...labels: string[]): string => {
+      for (const l of labels) {
+        const v = tableMap.get(l)
+        if (v) return v
+      }
+      return ''
+    }
+
+    const findByIncludes = (...keywords: string[]): string => {
+      for (const [label, value] of tableMap) {
+        if (keywords.some(k => label.includes(k))) return value
+      }
+      return ''
+    }
+
+    // ── 価格 ────────────────────────────────────────────────────────────────
+    const priceText = get('価格')
     const price = parsePriceJpy(priceText)
     if (!price) return null
 
     // ── 住所 ────────────────────────────────────────────────────────────────
-    const addressEl =
-      document.querySelector('.detailbody-info-titleaddress') ||
-      document.querySelector('[class*="address"]') ||
-      document.querySelector('th:has(+ td)')
-
-    let address = ''
-    // テーブル形式で「所在地」を探す
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('所在地')) {
-        address = (th.nextElementSibling as HTMLElement)?.textContent?.trim() ?? ''
-      }
-    })
-    if (!address) address = addressEl?.textContent?.trim() ?? ''
+    const address = get('所在地')
     if (!address) return null
 
     // ── 面積 ────────────────────────────────────────────────────────────────
-    let area = 0
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('専有面積') || th.textContent?.includes('建物面積')) {
-        const areaText = (th.nextElementSibling as HTMLElement)?.textContent ?? ''
-        area = parseFloat(areaText.replace(/[^0-9.]/g, '')) || 0
-      }
-    })
+    // 「建物面積」は一棟売り/戸建で敷地全体を指すケースがあり、専有面積と混同すると
+    // 35,000㎡ 級の異常値が入る。マンション専有面積のみを対象にする。
+    const areaText = get('専有面積')
+    const areaMatch = areaText.match(/(\d+(?:\.\d+)?)/)
+    const area = areaMatch ? parseFloat(areaMatch[1]) : 0
 
     // ── 築年数 ──────────────────────────────────────────────────────────────
-    let age = 0
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('築年月') || th.textContent?.includes('築年数')) {
-        const ageText = (th.nextElementSibling as HTMLElement)?.textContent ?? ''
-        const yearMatch = ageText.match(/(\d{4})年/)
-        if (yearMatch) {
-          age = new Date().getFullYear() - parseInt(yearMatch[1])
-        }
-      }
-    })
+    const ageText = findByIncludes('築年月', '築年数', '完成時期')
+    const yearMatch = ageText.match(/(\d{4})年/)
+    const age = yearMatch ? new Date().getFullYear() - parseInt(yearMatch[1]) : 0
 
-    // ── 建物名 ──────────────────────────────────────────────────────────────
-    const name =
-      document.querySelector('h1.detailbody-title')?.textContent?.trim() ||
-      document.querySelector('h1')?.textContent?.trim() ||
-      document.title.split('｜')[0].trim()
+    // ── 建物名（h1 から価格部分を除去）──────────────────────────────────────
+    const rawName = (
+      document.querySelector('h1.mainIndexR')?.textContent ||
+      document.querySelector('h1')?.textContent ||
+      document.title.split('｜')[0]
+    )?.trim() ?? ''
+    const name = rawName
+      .replace(/\s*\d+(?:\.\d+)?億(?:\d+(?:\.\d+)?万)?円.*/u, '')
+      .replace(/\s*\d+(?:\.\d+)?万円.*/u, '')
+      .replace(/[（(].*?[）)]\s*$/u, '')
+      .trim()
 
     // ── 管理費 ──────────────────────────────────────────────────────────────
-    let managementFee: number | undefined
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('管理費')) {
-        const feeText = (th.nextElementSibling as HTMLElement)?.textContent ?? ''
-        const fee = parsePriceJpy(feeText)
-        if (fee) managementFee = fee
-      }
-    })
+    const managementFee = parsePriceJpy(get('管理費')) || undefined
 
     // ── 交通 ────────────────────────────────────────────────────────────────
-    const transport: string[] = []
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('交通')) {
-        const td = th.nextElementSibling as HTMLElement
-        td?.querySelectorAll('li, p, div').forEach(el => {
-          const text = el.textContent?.trim()
-          if (text) transport.push(text)
-        })
-        if (!transport.length) {
-          const text = td?.textContent?.trim()
-          if (text) transport.push(text)
-        }
-      }
-    })
+    const transportText = get('交通')
+    const transport = transportText
+      ? transportText.split(/\n|\s{2,}/).map(s => s.trim()).filter(Boolean)
+      : []
 
     // ── 階数 ────────────────────────────────────────────────────────────────
-    let floor: string | undefined
-    document.querySelectorAll('th').forEach(th => {
-      if (th.textContent?.includes('階')) {
-        const text = (th.nextElementSibling as HTMLElement)?.textContent?.trim()
-        if (text) floor = text
-      }
-    })
+    const floor = findByIncludes('所在階', '階建', '階') || undefined
 
     return {
       url: window.location.href,
