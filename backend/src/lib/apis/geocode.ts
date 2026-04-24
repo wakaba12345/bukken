@@ -12,12 +12,24 @@ export interface Coordinates {
 }
 
 /**
+ * 全角数字・全角ハイフンを半角に変換（日本の住所によくある表記揺れ）
+ */
+function normalizeAddress(address: string): string {
+  return address
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[ー−―–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
  * 住所から緯度経度を取得
  */
 export async function geocode(address: string): Promise<Coordinates | null> {
   try {
+    const normalized = normalizeAddress(address)
     const url = new URL('https://msearch.gsi.go.jp/address-search/AddressSearch')
-    url.searchParams.set('q', address)
+    url.searchParams.set('q', normalized)
 
     const res = await fetch(url.toString(), {
       next: { revalidate: 2592000 }, // 30日キャッシュ

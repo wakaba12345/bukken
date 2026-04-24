@@ -88,12 +88,30 @@ export interface AreaMarket {
   estimatedYield?: number   // 推定利回り (%)
 }
 
+export interface ZoningInfo {
+  category: string                           // 用途地域名（例: 第一種低層住居専用地域）
+  buildingCoverageRatio?: number             // 建蔽率 %
+  floorAreaRatio?: number                    // 容積率 %
+  fireZone?: 'none' | 'semi_fire' | 'fire'   // 防火地域区分
+}
+
+export interface OfficialLandPrice {
+  pricePerSqm: number                        // 円/㎡（公示地価）
+  year: number
+  useCategory: string                        // 住宅地・商業地・工業地など
+  nearestStation?: string
+  distanceToStationM?: number
+  distanceToSiteM: number                    // 物件座標から最寄地点までの距離（m）
+}
+
 export interface ReportContent {
   type: ReportType
   property: PropertyData
   crossPlatform?: CrossPlatformResult
   disasterRisk?: DisasterRisk
   areaMarket?: AreaMarket
+  zoning?: ZoningInfo                        // deep_report のみ
+  officialLandPrice?: OfficialLandPrice      // deep_report のみ
   aiAnalysis: {
     summary: string
     pros: string[]

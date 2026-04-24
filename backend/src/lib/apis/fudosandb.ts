@@ -1,18 +1,20 @@
 /**
  * FUDOSAN DB API (Cabocia株式会社)
- * https://fudosandb.jp
  *
- * 使用方法: .env.local に FUDOSAN_DB_API_KEY を設定
+ * ⚠️ 2026年現在: `api.fudosandb.jp` は DNS 解決不可（サービス終了か domain 変更）。
+ * 再申請 / 新 domain が判明するまで graceful disabled。
+ * 賃料推定は Claude AI の prompt 内で推論させる、または将来 reinfolib + 独自モデルに置換予定。
  */
 
 import type { AreaMarket } from 'shared/types'
 
 const BASE_URL = 'https://api.fudosandb.jp/v1'
+const SERVICE_DISABLED = !process.env.FUDOSAN_DB_API_KEY // key 未設定時は自動的に disable
 
 function headers() {
   return {
     'Content-Type': 'application/json',
-    'X-API-Key': process.env.FUDOSAN_DB_API_KEY!,
+    'X-API-Key': process.env.FUDOSAN_DB_API_KEY ?? '',
   }
 }
 
@@ -39,6 +41,7 @@ interface RentEstimateResponse {
 export async function estimateRent(
   params: RentEstimateRequest,
 ): Promise<RentEstimateResponse | null> {
+  if (SERVICE_DISABLED) return null
   try {
     const res = await fetch(`${BASE_URL}/rent/estimate`, {
       method: 'POST',
@@ -76,6 +79,7 @@ export async function getAreaDetail(
   lat: number,
   lng: number,
 ): Promise<AreaDetailResponse | null> {
+  if (SERVICE_DISABLED) return null
   try {
     const res = await fetch(
       `${BASE_URL}/area/detail?lat=${lat}&lng=${lng}`,
@@ -112,6 +116,7 @@ interface AreaCompareResponse {
 export async function compareAreas(
   areaNames: string[],
 ): Promise<AreaCompareResponse | null> {
+  if (SERVICE_DISABLED) return null
   try {
     const res = await fetch(`${BASE_URL}/area/compare`, {
       method: 'POST',

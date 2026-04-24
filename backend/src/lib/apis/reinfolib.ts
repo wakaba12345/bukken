@@ -208,6 +208,184 @@ export interface Transaction {
   type: string           // 中古マンション etc.
 }
 
+// ─── 用途地域（Zoning） ───────────────────────────────────────────────────────
+
+export type ZoningCategory =
+  | '第一種低層住居専用地域'
+  | '第二種低層住居専用地域'
+  | '第一種中高層住居専用地域'
+  | '第二種中高層住居専用地域'
+  | '第一種住居地域'
+  | '第二種住居地域'
+  | '準住居地域'
+  | '田園住居地域'
+  | '近隣商業地域'
+  | '商業地域'
+  | '準工業地域'
+  | '工業地域'
+  | '工業専用地域'
+  | 'unknown'
+
+export interface ZoningInfo {
+  category: ZoningCategory
+  buildingCoverageRatio?: number  // 建蔽率（%）
+  floorAreaRatio?: number         // 容積率（%）
+  fireZone?: 'none' | 'semi_fire' | 'fire'
+}
+
+export async function getZoning(lat: number, lng: number): Promise<ZoningInfo | null> {
+  try {
+    const { x, y, z } = latLngToTile(lat, lng, 15)
+
+    // XKT002: 都市計画決定GISデータ（用途地域）
+    const res = await fetch(
+      `${BASE_URL}/XKT002/${z}/${x}/${y}.geojson`,
+      {
+        headers: headers(),
+        next: { revalidate: 604800 }, // 用途地域は変更頻度が低い（7日キャッシュ）
+      }
+    )
+
+    if (res.status === 404) return null
+    if (!res.ok) {
+      console.error('[Reinfolib] zoning error:', res.status)
+      return null
+    }
+
+    const data = await res.json()
+    const features = data?.features ?? []
+    if (features.length === 0) return null
+
+    // 一番近い feature のプロパティを採用（タイルにしか絞れないので）
+    const feat = features[0] as {
+      properties?: {
+        youto?: string
+        kenpei?: string | number
+        youseki?: string | number
+        bouka?: string
+      }
+    }
+    const p = feat.properties ?? {}
+
+    const categoryName = (p.youto ?? '').trim()
+    const category = (VALID_ZONING.includes(categoryName as ZoningCategory)
+      ? categoryName
+      : 'unknown') as ZoningCategory
+
+    const bcr = typeof p.kenpei === 'number' ? p.kenpei : parseFloat(String(p.kenpei ?? ''))
+    const far = typeof p.youseki === 'number' ? p.youseki : parseFloat(String(p.youseki ?? ''))
+
+    const boukaStr = (p.bouka ?? '').toString()
+    const fireZone = boukaStr.includes('準防火') ? 'semi_fire'
+                   : boukaStr.includes('防火')    ? 'fire'
+                   : 'none'
+
+    return {
+      category,
+      buildingCoverageRatio: isNaN(bcr) ? undefined : bcr,
+      floorAreaRatio:        isNaN(far) ? undefined : far,
+      fireZone,
+    }
+  } catch (e) {
+    console.error('[Reinfolib] getZoning failed:', e)
+    return null
+  }
+}
+
+const VALID_ZONING: ZoningCategory[] = [
+  '第一種低層住居専用地域', '第二種低層住居専用地域',
+  '第一種中高層住居専用地域', '第二種中高層住居専用地域',
+  '第一種住居地域', '第二種住居地域', '準住居地域', '田園住居地域',
+  '近隣商業地域', '商業地域',
+  '準工業地域', '工業地域', '工業専用地域',
+]
+
+// ─── 地価公示・地価調査（Official Land Price） ──────────────────────────────
+
+export interface OfficialLandPrice {
+  pricePerSqm: number           // 円/㎡
+  year: number                  // 基準年
+  useCategory: string           // 用途（住宅・商業・工業）
+  nearestStation?: string
+  distanceToStationM?: number
+  distanceToSiteM: number       // 物件から基準地点までの距離
+}
+
+export async function getOfficialLandPrice(
+  lat: number,
+  lng: number,
+  radiusKm: number = 1.0,
+): Promise<OfficialLandPrice | null> {
+  try {
+    // XPT002: 地価公示・地価調査のポイント API
+    const url = new URL(`${BASE_URL}/XPT002`)
+    url.searchParams.set('lat', String(lat))
+    url.searchParams.set('lng', String(lng))
+    url.searchParams.set('radius', String(radiusKm * 1000))
+    url.searchParams.set('limit', '10')
+
+    const res = await fetch(url.toString(), {
+      headers: headers(),
+      next: { revalidate: 2592000 }, // 30日（地価公示は年1回更新）
+    })
+
+    if (!res.ok) {
+      console.error('[Reinfolib] land price error:', res.status)
+      return null
+    }
+
+    const data = await res.json()
+    const features = data?.features ?? []
+    if (features.length === 0) return null
+
+    // 最も近い地点を選ぶ
+    type LandFeature = {
+      geometry?: { coordinates?: [number, number] }
+      properties?: Record<string, unknown>
+    }
+    const nearest = (features as LandFeature[])
+      .map(f => {
+        const coords = f.geometry?.coordinates
+        if (!coords || coords.length < 2) return null
+        const [flng, flat] = coords
+        const dist = haversineMeters(lat, lng, flat, flng)
+        return { feature: f, dist }
+      })
+      .filter((x): x is { feature: LandFeature; dist: number } => x !== null)
+      .sort((a, b) => a.dist - b.dist)[0]
+
+    if (!nearest) return null
+
+    const p = nearest.feature.properties ?? {}
+    const price = Number(p['価格'] ?? p['価格（円/㎡）'] ?? p['pricePerSqm'] ?? 0)
+    if (price <= 0) return null
+
+    return {
+      pricePerSqm: price,
+      year: Number(p['年'] ?? p['基準年'] ?? new Date().getFullYear()),
+      useCategory:        String(p['用途'] ?? p['利用区分'] ?? ''),
+      nearestStation:     p['最寄駅'] ? String(p['最寄駅']) : undefined,
+      distanceToStationM: p['駅距離'] ? Number(p['駅距離']) : undefined,
+      distanceToSiteM:    Math.round(nearest.dist),
+    }
+  } catch (e) {
+    console.error('[Reinfolib] getOfficialLandPrice failed:', e)
+    return null
+  }
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000
+  const toRad = (x: number) => x * Math.PI / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+// ─── 取引価格情報 ─────────────────────────────────────────────────────────────
+
 export async function getRecentTransactions(
   lat: number,
   lng: number,

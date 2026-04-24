@@ -9,19 +9,28 @@ export const maxDuration = 60 // Vercel Pro: up to 300s
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Dev bypass: 無 auth/無扣點、不寫 DB、只生成報告回傳 ───────────────────
+    const devBypass =
+      process.env.NODE_ENV === 'development' &&
+      req.headers.get('x-dev-bypass') === '1'
+
     // ── Auth ────────────────────────────────────────────────────────────────
-    const token = req.headers.get('authorization')?.replace('Bearer ', '')
-    if (!token) {
-      return json({ success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
-    }
+    let user: { id: string } | null = null
+    if (!devBypass) {
+      const token = req.headers.get('authorization')?.replace('Bearer ', '')
+      if (!token) {
+        return json({ success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
+      }
 
-    const { data: { user }, error: authError } = await createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
-    ).auth.getUser(token)
+      const { data: { user: authUser }, error: authError } = await createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_ANON_KEY!,
+      ).auth.getUser(token)
 
-    if (authError || !user) {
-      return json({ success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
+      if (authError || !authUser) {
+        return json({ success: false, error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401)
+      }
+      user = authUser
     }
 
     // ── Validate request ─────────────────────────────────────────────────────
@@ -35,6 +44,12 @@ export async function POST(req: NextRequest) {
     const pointCost = POINT_COSTS[type]
     if (!pointCost) {
       return json({ success: false, error: 'Invalid report type' }, 400)
+    }
+
+    // ── Dev bypass: 直接生成並回傳，不寫 DB、不扣點 ──────────────────────────
+    if (devBypass) {
+      const reportContent = await generateReport(property, type)
+      return json({ success: true, data: { ...reportContent, id: 'dev-preview' } })
     }
 
     // ── Upsert property ──────────────────────────────────────────────────────
@@ -60,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     // ── Deduct points (atomic) ───────────────────────────────────────────────
     try {
-      await deductPoints(user.id, pointCost, type, propertyRow.id)
+      await deductPoints(user!.id, pointCost, type, propertyRow.id)
     } catch (e: unknown) {
       if (e instanceof Error && e.message === 'INSUFFICIENT_POINTS') {
         return json({
@@ -79,7 +94,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       // 生成失敗時はポイントを返還
       await supabase.rpc('add_points', {
-        p_user_id: user.id,
+        p_user_id: user!.id,
         p_points: pointCost,
         p_plan_id: 'refund',
       })
@@ -90,7 +105,7 @@ export async function POST(req: NextRequest) {
     const { data: reportRow, error: reportError } = await supabase
       .from('reports')
       .insert({
-        user_id: user.id,
+        user_id: user!.id,
         property_id: propertyRow.id,
         type: reportContent.type,
         content: reportContent,

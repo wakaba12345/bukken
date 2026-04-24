@@ -1,12 +1,15 @@
 /**
  * 国土交通省 土地総合情報システム — 不動産取引価格情報取得 API
- * https://www.land.mlit.go.jp/webland/api.html
  *
- * 完全無料・申請不要
- * 実際の成約価格（過去取引実績）を提供
+ * ⚠️ 2026年現在: 旧 domain `www.land.mlit.go.jp` は廃止（DNS 解決不可）。
+ * 本サービスは不動産情報ライブラリ（reinfolib）の XPT001 エンドポイントに
+ * 統合された。reinfolib の API key 入手後、`reinfolib.ts` 側で再実装する予定。
+ *
+ * 現状: graceful disabled（呼び出しても常に null）
  */
 
 const BASE_URL = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch'
+const SERVICE_DISABLED = true // reinfolib XPT001 に移行まで disable
 
 export interface TradeRecord {
   period: string        // 取引時期 e.g. "2024年第1四半期"
@@ -45,6 +48,7 @@ export async function getNearbyTransactions(
   type: TradeType = '03',
   quartersBack = 8,
 ): Promise<AreaTransactionResult | null> {
+  if (SERVICE_DISABLED) return null
   try {
     const prefCode = extractPrefCode(address)
     if (!prefCode) {
