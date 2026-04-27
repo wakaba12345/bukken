@@ -113,6 +113,44 @@ export interface ZoningInfo {
   fireZone?: 'none' | 'semi_fire' | 'fire'   // 防火地域区分
 }
 
+export interface VisionAnalysis {
+  overall_score: number              // 0-100
+  risk_level: string                 // '低風險' | '注意' | '警示' | '高風險'
+  summary: string
+  details: {
+    garbage_area?:    { visible: boolean; condition: string | null; risk: string; note: string }
+    balconies?:       { hoarding: boolean; dead_plants: boolean; excessive_laundry: boolean; risk: string; note: string }
+    exterior?:        { tile_damage: boolean; graffiti: boolean; condition: string; note: string }
+    common_area?:     { decorations: boolean; personal_items: boolean; risk: string; note: string }
+    mailbox_area?:    { visible: boolean; clean: boolean | null; ad_accumulation: string | null; damaged: boolean | null; note: string }
+    bicycle_parking?: { visible: boolean; condition: string | null; abandoned_bikes: boolean | null; note: string }
+    sunlight?:        { direction: string; surrounding_height: string; rating: string; note: string }
+    environment?:     { street_cleanliness: string; area_type: string; note: string }
+  }
+  red_flags: string[]
+  green_flags: string[]
+  management_advice: string
+  coordinates: { lat: number; lng: number }
+}
+
+export interface CemeteryNearby {
+  name: string
+  address?: string
+  distance_m: number
+  lat: number
+  lng: number
+}
+
+export interface CemeteryCheck {
+  found: boolean
+  risk_level: string                 // '🔴 高度忌諱' | '🟠 注意' | '🟡 低度影響' | '🟢 影響なし'
+  nearest_distance_m: number | null
+  name: string | null
+  taiwan_buyer_note: string
+  all_within_200m: CemeteryNearby[]
+  coordinates: { lat: number; lng: number }
+}
+
 export interface OfficialLandPrice {
   pricePerSqm: number                        // 円/㎡（公示地価）
   year: number
@@ -130,6 +168,8 @@ export interface ReportContent {
   areaMarket?: AreaMarket
   zoning?: ZoningInfo                        // deep_report のみ
   officialLandPrice?: OfficialLandPrice      // deep_report のみ
+  visionAnalysis?: VisionAnalysis            // deep_report のみ（Street View 外観気場分析）
+  cemeteryCheck?: CemeteryCheck              // deep_report のみ（半径 200m 墓地検索）
   areaHealthScore?: AreaHealthScore          // e-Stat 多源集計
   aiAnalysis: {
     summary: string

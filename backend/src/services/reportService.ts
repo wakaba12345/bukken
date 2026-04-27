@@ -9,6 +9,8 @@ import type {
   OfficialLandPrice,
 } from 'shared/types'
 import { computeAreaHealthScore } from './areaHealthScoreService'
+import { analyzePropertyVision } from './visionAnalysisService'
+import { checkCemeteryNearby } from './cemeteryCheckService'
 import { geocode } from '../lib/apis/geocode'
 import { getEarthquakeRisk } from '../lib/apis/jshis'
 import { getDisasterRisk, getZoning, getOfficialLandPrice } from '../lib/apis/reinfolib'
@@ -51,12 +53,13 @@ export async function generateReport(
   const isDeep = type === 'deep_report'
 
   // ── 並列でデータ取得 ────────────────────────────────────────────────────
-  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes] = await Promise.allSettled([
+  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes, visionRes, cemeteryRes] = await Promise.allSettled([
     lat && lng ? fetchDisasterRisk(lat, lng) : Promise.resolve(undefined),
     lat && lng ? getAreaMarket(property.address, lat, lng) : Promise.resolve(undefined),
     getNearbyTransactions(property.address),
-    isDeep && lat && lng ? getZoning(lat, lng) : Promise.resolve(null),
-    isDeep && lat && lng ? getOfficialLandPrice(lat, lng) : Promise.resolve(null),
+    // zoning / landPrice: 現段階は全 type で実行（テスト + 将来のマスキング戦略向け）
+    lat && lng ? getZoning(lat, lng) : Promise.resolve(null),
+    lat && lng ? getOfficialLandPrice(lat, lng) : Promise.resolve(null),
     lat && lng ? getElevation(lat, lng) : Promise.resolve(null),
     getAreaDemographics(property.address),
     getPopulationMovement(property.address),
@@ -64,6 +67,12 @@ export async function generateReport(
     getHousingVacancy(property.address),
     getForeignResidents(property.address),
     getEmploymentIncome(property.address),
+    // Vision / Cemetery: 現段階は全 type で実行（テスト用に完全データ生成）。
+    // 将来：マスキング戦略導入時（完全版でぼかし → 課金プランで開放）に type で
+    // 表示制御を追加予定。data 自体は全 type で生成して DB に保存しておけば
+    // プラン変更で再分析せず開放可能。
+    lat && lng ? analyzePropertyVision({ lat, lng }) : Promise.resolve(null),
+    lat && lng ? checkCemeteryNearby({ lat, lng }) : Promise.resolve(null),
   ])
 
   const disaster     = disasterRisk.status === 'fulfilled'     ? disasterRisk.value     : undefined
@@ -78,6 +87,13 @@ export async function generateReport(
   const vacancy      = vacancyRes.status === 'fulfilled'       ? (vacancyRes.value ?? undefined) : undefined
   const foreignRes   = foreignResRes.status === 'fulfilled'    ? (foreignResRes.value ?? undefined) : undefined
   const employment   = employmentRes.status === 'fulfilled'    ? (employmentRes.value ?? undefined) : undefined
+  const vision       = visionRes.status === 'fulfilled'        ? (visionRes.value ?? undefined) : undefined
+  const cemetery     = cemeteryRes.status === 'fulfilled'      ? (cemeteryRes.value ?? undefined) : undefined
+
+  if (process.env.NODE_ENV === 'development') {
+    if (visionRes.status === 'rejected') console.warn('[reportService] vision failed:', visionRes.reason)
+    if (cemeteryRes.status === 'rejected') console.warn('[reportService] cemetery failed:', cemeteryRes.reason)
+  }
 
   // ── 地域健康度スコア集計（Phase 1.6、prompt には注入しない） ─────────────
   const areaHealthScore = computeAreaHealthScore({
@@ -106,6 +122,8 @@ export async function generateReport(
     areaMarket: mergedMarket,
     zoning,
     officialLandPrice: landPrice,
+    visionAnalysis: vision,
+    cemeteryCheck: cemetery,
     areaHealthScore: areaHealthScore ?? undefined,
     aiAnalysis,
     generatedAt: new Date().toISOString(),
@@ -174,11 +192,13 @@ CRITICAL DATA INTEGRITY RULES (violations are serious errors):
   const userPrompt = `Analyze this property and return JSON with this exact structure:
 {
   "summary": "2-3 sentence overview",
-  "pros": [...],
-  "cons": [...],
+  "pros": ["short pro statement 1", "short pro statement 2", "..."],
+  "cons": ["short con statement 1", "short con statement 2", "..."],
   "recommendation": "1-2 sentence actionable advice",
   "investmentScore": 75
 }
+
+IMPORTANT: pros and cons must be **arrays of strings**, NOT arrays of objects. Each entry is a single sentence string.
 
 Guidance for pros/cons: list every material signal the data sections below support — do NOT cap at a fixed count. Each data section (market, demographics, migration, construction, international community, purchasing power, disaster, elevation, zoning, land price, transactions) may contribute one or more pros/cons when meaningful. Quality over fluff, but never omit a significant finding just because you already have "enough" entries. Rule 5 still applies — no fabrication when data is missing.
 
@@ -270,13 +290,13 @@ ${transactions.transactions.slice(0, 5).map(t =>
   `  • ¥${t.price.toLocaleString()} / ${t.area}㎡ (¥${t.pricePerSqm.toLocaleString()}/㎡)${t.floorPlan ? ` ${t.floorPlan}` : ''}${t.buildingYear ? ` 築${new Date().getFullYear() - t.buildingYear}年` : ''} ${t.period}`
 ).join('\n')}` : ''}
 
-${isDeep && zoning ? `Zoning (用途地域):
+${zoning ? `Zoning (用途地域):
 - Category: ${zoning.category}
 - Building coverage ratio (建蔽率): ${zoning.buildingCoverageRatio ?? 'N/A'}%
 - Floor area ratio (容積率): ${zoning.floorAreaRatio ?? 'N/A'}%
 - Fire zone: ${zoning.fireZone ?? 'none'}` : ''}
 
-${isDeep && landPrice ? `Official land price (公示地価 reference point within ${landPrice.distanceToSiteM}m):
+${landPrice ? `Official land price (公示地価 reference point within ${landPrice.distanceToSiteM}m):
 - Price/㎡: ¥${landPrice.pricePerSqm.toLocaleString()} (${landPrice.year})
 - Use category: ${landPrice.useCategory}${landPrice.nearestStation ? `\n- Nearest station: ${landPrice.nearestStation}${landPrice.distanceToStationM ? ` (${landPrice.distanceToStationM}m)` : ''}` : ''}
 
@@ -296,7 +316,7 @@ ${isDeep ? 'Be comprehensive. Include: (1) zoning implications for future develo
   // max_tokens: prompt にマクロデータ（人口/人口移動/建築着工/海抜）を
   // 追加した後、従来の設定では JSON が途中で切れる事象が発生。余裕を持たせる。
   const callArgs = {
-    max_tokens: isQuick ? 900 : isDeep ? 3000 : 2000,
+    max_tokens: isQuick ? 900 : isDeep ? 4000 : 2000,
     system: systemPrompt,
     messages: [{ role: 'user' as const, content: userPrompt }],
   }
@@ -320,14 +340,18 @@ ${isDeep ? 'Be comprehensive. Include: (1) zoning implications for future develo
   }
 
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[reportService] model used: ${modelUsed}`)
+    console.log(`[reportService] model used: ${modelUsed}, stop_reason: ${response.stop_reason}, usage:`, response.usage)
   }
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
 
   try {
     return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch {
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[reportService] JSON parse failed:', e instanceof Error ? e.message : 'unknown')
+      console.warn('[reportService] raw text (last 500 chars):', text.slice(-500))
+    }
     return {
       summary: text.slice(0, 200),
       pros: [],
