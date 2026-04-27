@@ -8,15 +8,39 @@
 import type { PropertyFeatures } from '../../../shared/types'
 
 /**
- * 「構造・階建て」テキストから構造名を抽出
- * "RC造11階建" → "RC造"
- * "鉄骨造3階建" → "鉄骨造"
- * "木造2階建" → "木造"
+ * 「構造・階建て」テキストから構造名を抽出。
+ * SUUMO は「3階/RC7階建」のように「造」を省略するため、両方サポート。
+ *
+ * 出力は正規化された「○○造」形式:
+ *   "RC造11階建" → "RC造"
+ *   "3階/RC7階建" → "RC造"      （SUUMO 中古マンション形式）
+ *   "鉄骨造3階建" → "鉄骨造"
+ *   "木造2階建" → "木造"
  */
 export function extractStructure(text: string): string {
   if (!text) return ''
-  const m = text.match(/(SRC造|RC造|鉄骨造|鉄骨鉄筋|軽量鉄骨|重量鉄骨|木造|プレキャスト|ALC造|ブロック造)/)
-  return m ? m[1] : ''
+  // 順序重要：「造」付き / 長い表記を先に試す
+  const patterns: Array<[RegExp, string]> = [
+    [/SRC造/, 'SRC造'],
+    [/鉄骨鉄筋コンクリート造?/, 'SRC造'],
+    [/RC造/, 'RC造'],
+    [/鉄筋コンクリート造?/, 'RC造'],
+    [/軽量鉄骨造?/, '軽量鉄骨造'],
+    [/重量鉄骨造?/, '重量鉄骨造'],
+    [/鉄骨造/, '鉄骨造'],
+    [/木造/, '木造'],
+    [/プレキャスト/, 'プレキャスト'],
+    [/ALC造?/, 'ALC造'],
+    [/ブロック造/, 'ブロック造'],
+    // 「造」省略形（SUUMO 中古マンション「RC7階建」形式）— 最後にチェック
+    [/\bSRC\b/, 'SRC造'],
+    [/\bRC\b/, 'RC造'],
+    [/\b鉄骨\b/, '鉄骨造'],
+  ]
+  for (const [re, normalized] of patterns) {
+    if (re.test(text)) return normalized
+  }
+  return ''
 }
 
 /**
