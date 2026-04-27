@@ -160,5 +160,5 @@ export interface ApiResponse<T> {
   success: boolean
   data?: T
   error?: string
-  code?: 'INSUFFICIENT_POINTS' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'INTERNAL_ERROR'
+  code?: 'INSUFFICIENT_POINTS' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'INTERNAL_ERROR' | 'GOOGLE_KEY_NOT_CONFIGURED'
 }
