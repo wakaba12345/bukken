@@ -191,7 +191,16 @@ CRITICAL DATA INTEGRITY RULES (violations are serious errors):
 2. NEVER estimate, round, infer, or fabricate numbers (price per ㎡, yield, rent, area, management fee, age, etc.) that are not explicitly given.
 3. If a field is "N/A", "Unknown", or missing, you MUST say "データなし / 資料未提供" in Japanese/Chinese. Do NOT guess.
 4. For disaster risks, the value "none" means "DATA UNAVAILABLE" (the API call failed or no API key), NOT "zero risk". Treat "none" as unknown and explicitly state the data is unavailable. Never claim a property is "safe" or "low risk" based on a "none" value.
-5. If multiple pros/cons require numbers you don't have, write fewer pros/cons rather than inventing values.`
+5. If multiple pros/cons require numbers you don't have, write fewer pros/cons rather than inventing values.
+
+J&E 管理現場による物件設備の評価ルール（cons / advice で必ず言及すること）:
+- **木造（structure に「木造」を含む）**: 必ず警告として cons に挙げる。耐震性能が RC・SRC より劣る、防音性・断熱性弱い、融資審査が厳しい（築古木造は特に外国人投資家に融資不可）、火災保険料高、台湾人投資家にとっては「鉄筋造」が一般的なため敬遠されやすい
+- **1 階（floor に "1F" / "1階" / 1F が含まれる）**: cons に挙げる。防犯リスク（侵入されやすい）、湿気・カビ、虫害、採光不利、台湾人テナント特に女性に忌避される傾向
+- **オートロックなし**: cons に挙げる。防犯弱、女性テナント・単身者に敬遠、賃料天井が下がる
+- **バス・トイレ一体（ユニット）**: 中性〜やや cons。日本では狭小ワンルームでは一般的だが、台湾人投資家・日本のミドル層以上は分離を好む。1R/1K では許容、1LDK 以上は分離が望ましい旨を述べる
+- **バルコニーなし**: cons。日本人テナントは洗濯物干場として重視、布団干せない、室内乾燥機必須となり管理コスト増
+- **洗濯機室内不可**: cons（強）。共用洗濯場・屋外設置は日本人に強く敬遠される、賃料下押し圧力大
+- **浴槽なし（シャワーのみ）**: cons（強）。日本人テナントは浴槽必須、外国人向け短期賃貸でない限り賃料・入居率に大きなマイナス、台湾人投資家には「ユニットのバスタブなし物件はリセール困難」と必ず警告すること`
 
   const userPrompt = `Analyze this property and return JSON with this exact structure:
 {
@@ -211,9 +220,18 @@ Property data (use these numbers VERBATIM — do not modify):
 - Price: ¥${property.price.toLocaleString()}
 - Area: ${property.area}㎡
 - Age: ${property.age ? `${property.age}年` : 'Unknown'}
+- Floor: ${property.floor ?? 'N/A'}
+- Structure: ${property.structure ?? 'N/A'}
+- Layout: ${property.layout ?? 'N/A'}
 - Platform: ${property.platform}
 - Transport: ${property.transport?.join(', ') || 'N/A'}
 - Management fee: ${property.managementFee ? `¥${property.managementFee.toLocaleString()}/月` : 'N/A'}
+${property.features ? `- Features:
+  - Autolock: ${property.features.autolock == null ? 'N/A' : property.features.autolock ? 'あり' : 'なし'}
+  - バス・トイレ別: ${property.features.bathToiletSeparate == null ? 'N/A' : property.features.bathToiletSeparate ? '別（分離）' : '一体（ユニット）'}
+  - バルコニー: ${property.features.balcony == null ? 'N/A' : property.features.balcony ? 'あり' : 'なし'}
+  - 洗濯機室内設置: ${property.features.washerIndoor == null ? 'N/A' : property.features.washerIndoor ? '可能' : '不可（共用 or 屋外）'}
+  - 浴槽: ${property.features.bathtub == null ? 'N/A' : property.features.bathtub ? 'あり' : 'なし（シャワーのみ）'}` : '- Features: データなし'}
 
 ${market ? `Area market data:
 - Avg price/㎡: ¥${market.avgPricePerSqm.toLocaleString()}

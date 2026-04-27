@@ -17,7 +17,18 @@ export interface PropertyData {
   floor?: string         // 階数（例: "3F / 10F"）
   managementFee?: number // 管理費（円/月）
   transport?: string[]   // 交通アクセス
+  structure?: string     // 構造（RC造、SRC造、鉄骨造、木造 等）
+  layout?: string        // 間取り（例: "1K", "2LDK"）
+  features?: PropertyFeatures
   rawData?: Record<string, unknown>
+}
+
+export interface PropertyFeatures {
+  autolock?: boolean              // オートロック
+  bathToiletSeparate?: boolean    // バス・トイレ別（true=分離 / false=ユニット一体）
+  balcony?: boolean               // バルコニー
+  washerIndoor?: boolean          // 洗濯機置場（true=室内 / false=共用 or 屋外）
+  bathtub?: boolean               // 浴槽（false=シャワーのみ → 日本人テナント嫌避）
 }
 
 export interface CrossPlatformResult {
