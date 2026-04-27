@@ -24,6 +24,7 @@ import {
   getHousingVacancy, type HousingVacancy,
   getForeignResidents, type ForeignResidents,
   getEmploymentIncome, type EmploymentIncome,
+  getHouseholdSpending, type HouseholdSpending,
 } from '../lib/apis/estat'
 
 const anthropic = new Anthropic({
@@ -53,7 +54,7 @@ export async function generateReport(
   const isDeep = type === 'deep_report'
 
   // ── 並列でデータ取得 ────────────────────────────────────────────────────
-  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes, visionRes, cemeteryRes] = await Promise.allSettled([
+  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes, householdRes, visionRes, cemeteryRes] = await Promise.allSettled([
     lat && lng ? fetchDisasterRisk(lat, lng) : Promise.resolve(undefined),
     lat && lng ? getAreaMarket(property.address, lat, lng) : Promise.resolve(undefined),
     getNearbyTransactions(property.address),
@@ -67,6 +68,7 @@ export async function generateReport(
     getHousingVacancy(property.address),
     getForeignResidents(property.address),
     getEmploymentIncome(property.address),
+    getHouseholdSpending(property.address),
     // Vision / Cemetery: 現段階は全 type で実行（テスト用に完全データ生成）。
     // 将来：マスキング戦略導入時（完全版でぼかし → 課金プランで開放）に type で
     // 表示制御を追加予定。data 自体は全 type で生成して DB に保存しておけば
@@ -87,6 +89,7 @@ export async function generateReport(
   const vacancy      = vacancyRes.status === 'fulfilled'       ? (vacancyRes.value ?? undefined) : undefined
   const foreignRes   = foreignResRes.status === 'fulfilled'    ? (foreignResRes.value ?? undefined) : undefined
   const employment   = employmentRes.status === 'fulfilled'    ? (employmentRes.value ?? undefined) : undefined
+  const household    = householdRes.status === 'fulfilled'     ? (householdRes.value ?? undefined) : undefined
   const vision       = visionRes.status === 'fulfilled'        ? (visionRes.value ?? undefined) : undefined
   const cemetery     = cemeteryRes.status === 'fulfilled'      ? (cemeteryRes.value ?? undefined) : undefined
 
@@ -104,7 +107,7 @@ export async function generateReport(
   }
 
   // ── Claude API でレポート生成 ────────────────────────────────────────────
-  const aiAnalysis = await generateAiAnalysis(property, type, disaster, market, transactions, zoning, landPrice, elevation, demographics, popMove, construction, vacancy, foreignRes, employment)
+  const aiAnalysis = await generateAiAnalysis(property, type, disaster, market, transactions, zoning, landPrice, elevation, demographics, popMove, construction, vacancy, foreignRes, employment, household)
 
   // 成約データを areaMarket のフォールバックとして使用
   const mergedMarket: AreaMarket | undefined = market ?? (transactions && transactions.count > 0 ? {
@@ -173,6 +176,7 @@ async function generateAiAnalysis(
   vacancy?: HousingVacancy,
   foreignRes?: ForeignResidents,
   employment?: EmploymentIncome,
+  household?: HouseholdSpending,
 ) {
   const isQuick = type === 'quick_summary'
   const isDeep  = type === 'deep_report'
@@ -269,6 +273,13 @@ ${foreignRes.china != null ? `- Chinese residents: ${foreignRes.china.toLocaleSt
 ${foreignRes.korea != null ? `- Korean residents: ${foreignRes.korea.toLocaleString()}` : ''}
 ${foreignRes.vietnam != null ? `- Vietnamese residents: ${foreignRes.vietnam.toLocaleString()}` : ''}
 (Note: This data is ${foreignRes.asOf} — absolute numbers are outdated. Use ONLY as a PATTERN indicator, e.g. "this area historically has a strong Taiwanese community," not as a current figure. For Taiwanese investors specifically, high Taiwanese ratio signals: existing cultural network, easier self-use, stable Taiwanese tenant demand. Always qualify such statements with the data year. If Taiwanese ratio ≥3%, or any single nationality exceeds 20% of foreign residents, include it as a pro/con explicitly.)` : ''}
+
+${household ? `Household actual spending (総務省 ${household.source}, ${household.areaName} ${household.year}):
+- Monthly housing expense (持家＋借家平均): ¥${household.monthlyHousingExpenseJpy.toLocaleString()}
+${household.monthlyRentExpenseJpy != null ? `- Monthly rent/land payment (借家世帯比例で平均化): ¥${household.monthlyRentExpenseJpy.toLocaleString()}` : ''}
+${household.monthlyConsumptionJpy != null ? `- Monthly total consumption: ¥${household.monthlyConsumptionJpy.toLocaleString()}` : ''}
+${household.housingExpenseRatio != null ? `- Housing expense / consumption ratio: ${(household.housingExpenseRatio * 100).toFixed(1)}%` : ''}
+(Note: this is REAL household spending data — distinct from employment.affordableMonthlyRentJpy which is a 1/3-income theoretical ceiling. Compare these two: theoretical ceiling vs actual spending tells you whether the area's residents are spending below or above their affordability cap. Cite both numbers when framing rent setting strategy.)` : ''}
 
 ${employment ? `Income & purchasing power (総務省 ${employment.source}):
 - Area: ${employment.areaName}

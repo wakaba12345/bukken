@@ -26,3 +26,4 @@ export { getHousingConstruction, type HousingConstruction } from './construction
 export { getHousingVacancy, type HousingVacancy } from './housing'
 export { getForeignResidents, type ForeignResidents } from './foreignResidents'
 export { getEmploymentIncome, type EmploymentIncome } from './employment'
+export { getHouseholdSpending, type HouseholdSpending } from './household'
