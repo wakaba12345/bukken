@@ -40,57 +40,75 @@ function latLngToTile(lat: number, lng: number, zoom: number) {
   return { x, y, z: zoom }
 }
 
+// ─── reinfolib 共通 fetch（query-based、Path-based は 404 を返す）─────────────
+// 全 API endpoint は ?response_format=geojson&z&x&y 形式（XKT002 / XPT002 manual 確認済み）
+// 旧 path-based ${BASE_URL}/XKT002/${z}/${x}/${y}.geojson は全て 404
+async function fetchReinfolibTile<T = unknown>(
+  endpoint: string,
+  lat: number,
+  lng: number,
+  zoom: number = 13,
+  extraParams: Record<string, string> = {},
+  revalidate: number = 86400,
+): Promise<T | null> {
+  try {
+    const { x, y, z } = latLngToTile(lat, lng, zoom)
+    const url = new URL(`${BASE_URL}/${endpoint}`)
+    url.searchParams.set('response_format', 'geojson')
+    url.searchParams.set('z', String(z))
+    url.searchParams.set('x', String(x))
+    url.searchParams.set('y', String(y))
+    for (const [k, v] of Object.entries(extraParams)) url.searchParams.set(k, v)
+
+    const res = await fetch(url.toString(), {
+      headers: headers(),
+      next: { revalidate },
+    })
+
+    if (res.status === 404) return null
+    if (!res.ok) {
+      console.error(`[Reinfolib] ${endpoint} error: ${res.status}`)
+      return null
+    }
+    return (await res.json()) as T
+  } catch (e) {
+    console.error(`[Reinfolib] ${endpoint} fetch failed:`, e)
+    return null
+  }
+}
+
 // ─── 洪水浸水想定区域 ─────────────────────────────────────────────────────────
 
 export async function getFloodRisk(
   lat: number,
   lng: number,
 ): Promise<{ risk: FloodRisk; depthM?: number } | null> {
-  try {
-    const { x, y, z } = latLngToTile(lat, lng, 15)
+  // XKT007: 洪水浸水想定区域（想定最大規模）— zoom 11-15
+  const data = await fetchReinfolibTile<{ features?: Array<{ properties?: { depth?: string; rank?: string } }> }>(
+    'XKT007', lat, lng, 13,
+  )
+  if (data == null) return { risk: 'none' }
+  const features = data.features ?? []
+  if (features.length === 0) return { risk: 'none' }
 
-    // 洪水浸水想定区域（想定最大規模）
-    const res = await fetch(
-      `${BASE_URL}/XKT007/${z}/${x}/${y}.geojson`,
-      {
-        headers: headers(),
-        next: { revalidate: 86400 },
-      }
-    )
+  // 浸水深から risk レベルを判定
+  const depths = features
+    .map(f => {
+      const depthStr = f.properties?.depth ?? f.properties?.rank ?? ''
+      const depthNum = parseFloat(depthStr.replace(/[^0-9.]/g, ''))
+      return isNaN(depthNum) ? 0 : depthNum
+    })
+    .filter((d: number) => d > 0)
 
-    if (res.status === 404) return { risk: 'none' }
-    if (!res.ok) {
-      console.error('[Reinfolib] flood risk error:', res.status)
-      return null
-    }
+  const maxDepth = depths.length > 0 ? Math.max(...depths) : 0
 
-    const data = await res.json()
-    const features = data?.features ?? []
+  let risk: FloodRisk = 'low'
+  if (maxDepth >= 5)      risk = 'very_high'
+  else if (maxDepth >= 3) risk = 'high'
+  else if (maxDepth >= 1) risk = 'medium'
+  else if (maxDepth > 0)  risk = 'low'
 
-    if (features.length === 0) return { risk: 'none' }
-
-    // 浸水深から risk レベルを判定
-    const depths = features
-      .map((f: { properties?: { depth?: string; rank?: string } }) => {
-        const depthStr = f.properties?.depth ?? f.properties?.rank ?? ''
-        const depthNum = parseFloat(depthStr.replace(/[^0-9.]/g, ''))
-        return isNaN(depthNum) ? 0 : depthNum
-      })
-      .filter((d: number) => d > 0)
-
-    const maxDepth = depths.length > 0 ? Math.max(...depths) : 0
-
-    let risk: FloodRisk = 'low'
-    if (maxDepth >= 5)    risk = 'very_high'
-    else if (maxDepth >= 3) risk = 'high'
-    else if (maxDepth >= 1) risk = 'medium'
-    else if (maxDepth > 0)  risk = 'low'
-
-    return { risk, depthM: maxDepth || undefined }
-  } catch (e) {
-    console.error('[Reinfolib] getFloodRisk failed:', e)
-    return null
-  }
+  return { risk, depthM: maxDepth || undefined }
 }
 
 // ─── 土砂災害警戒区域 ─────────────────────────────────────────────────────────
@@ -99,37 +117,17 @@ export async function getLandslideRisk(
   lat: number,
   lng: number,
 ): Promise<LandslideRisk | null> {
-  try {
-    const { x, y, z } = latLngToTile(lat, lng, 15)
+  // XKT011: 土砂災害警戒区域（急傾斜地の崩壊）
+  const data = await fetchReinfolibTile<{ features?: Array<{ properties?: { type?: string } }> }>(
+    'XKT011', lat, lng, 13,
+  )
+  if (data == null) return 'none'
+  const features = data.features ?? []
+  if (features.length === 0) return 'none'
 
-    // 土砂災害警戒区域（急傾斜地の崩壊）
-    const res = await fetch(
-      `${BASE_URL}/XKT011/${z}/${x}/${y}.geojson`,
-      {
-        headers: headers(),
-        next: { revalidate: 86400 },
-      }
-    )
-
-    if (res.status === 404) return 'none'
-    if (!res.ok) return null
-
-    const data = await res.json()
-    const features = data?.features ?? []
-
-    if (features.length === 0) return 'none'
-
-    // 特別警戒区域（レッドゾーン）があれば high
-    const hasSpecial = features.some(
-      (f: { properties?: { type?: string } }) =>
-        f.properties?.type?.includes('特別')
-    )
-
-    return hasSpecial ? 'high' : 'medium'
-  } catch (e) {
-    console.error('[Reinfolib] getLandslideRisk failed:', e)
-    return null
-  }
+  // 特別警戒区域（レッドゾーン）があれば high
+  const hasSpecial = features.some(f => f.properties?.type?.includes('特別'))
+  return hasSpecial ? 'high' : 'medium'
 }
 
 // ─── 津波浸水想定 ─────────────────────────────────────────────────────────────
@@ -138,42 +136,25 @@ export async function getTsunamiRisk(
   lat: number,
   lng: number,
 ): Promise<{ risk: TsunamiRisk; depthM?: number } | null> {
-  try {
-    const { x, y, z } = latLngToTile(lat, lng, 15)
+  // XKT009: 津波浸水想定
+  const data = await fetchReinfolibTile<{ features?: Array<{ properties?: { depth?: string } }> }>(
+    'XKT009', lat, lng, 13,
+  )
+  if (data == null) return { risk: 'none' }
+  const features = data.features ?? []
+  if (features.length === 0) return { risk: 'none' }
 
-    const res = await fetch(
-      `${BASE_URL}/XKT009/${z}/${x}/${y}.geojson`,
-      {
-        headers: headers(),
-        next: { revalidate: 86400 },
-      }
-    )
+  const depths = features
+    .map(f => parseFloat(f.properties?.depth?.replace(/[^0-9.]/g, '') ?? '0'))
+    .filter((d: number) => !isNaN(d) && d > 0)
 
-    if (res.status === 404) return { risk: 'none' }
-    if (!res.ok) return null
+  const maxDepth = depths.length > 0 ? Math.max(...depths) : 0
 
-    const data = await res.json()
-    const features = data?.features ?? []
+  let risk: TsunamiRisk = 'low'
+  if (maxDepth >= 10)     risk = 'high'
+  else if (maxDepth >= 3) risk = 'medium'
 
-    if (features.length === 0) return { risk: 'none' }
-
-    const depths = features
-      .map((f: { properties?: { depth?: string } }) =>
-        parseFloat(f.properties?.depth?.replace(/[^0-9.]/g, '') ?? '0')
-      )
-      .filter((d: number) => !isNaN(d) && d > 0)
-
-    const maxDepth = depths.length > 0 ? Math.max(...depths) : 0
-
-    let risk: TsunamiRisk = 'low'
-    if (maxDepth >= 10)   risk = 'high'
-    else if (maxDepth >= 3) risk = 'medium'
-
-    return { risk, depthM: maxDepth || undefined }
-  } catch (e) {
-    console.error('[Reinfolib] getTsunamiRisk failed:', e)
-    return null
-  }
+  return { risk, depthM: maxDepth || undefined }
 }
 
 // ─── 統合: reportService から呼ぶメインの関数 ─────────────────────────────────
@@ -234,61 +215,40 @@ export interface ZoningInfo {
 }
 
 export async function getZoning(lat: number, lng: number): Promise<ZoningInfo | null> {
-  try {
-    const { x, y, z } = latLngToTile(lat, lng, 15)
-
-    // XKT002: 都市計画決定GISデータ（用途地域）
-    const res = await fetch(
-      `${BASE_URL}/XKT002/${z}/${x}/${y}.geojson`,
-      {
-        headers: headers(),
-        next: { revalidate: 604800 }, // 用途地域は変更頻度が低い（7日キャッシュ）
-      }
-    )
-
-    if (res.status === 404) return null
-    if (!res.ok) {
-      console.error('[Reinfolib] zoning error:', res.status)
-      return null
+  // XKT002: 都市計画決定GISデータ（用途地域）
+  // 実 properties: use_area_ja / u_building_coverage_ratio_ja「80%」/ u_floor_area_ratio_ja「500%」
+  // ※ 防火地域情報は XKT002 には含まれない（別 endpoint XKT003 などにあるが本 dataset では取得不可）
+  type ZonFeature = {
+    properties?: {
+      use_area_ja?: string
+      u_building_coverage_ratio_ja?: string
+      u_floor_area_ratio_ja?: string
     }
+  }
+  const data = await fetchReinfolibTile<{ features?: ZonFeature[] }>(
+    'XKT002', lat, lng, 13, {}, 604800,
+  )
+  if (data == null) return null
+  const features = data.features ?? []
+  if (features.length === 0) return null
 
-    const data = await res.json()
-    const features = data?.features ?? []
-    if (features.length === 0) return null
+  // 一番近い feature のプロパティを採用（タイルにしか絞れないので最初の feature を採用）
+  const p = features[0].properties ?? {}
 
-    // 一番近い feature のプロパティを採用（タイルにしか絞れないので）
-    const feat = features[0] as {
-      properties?: {
-        youto?: string
-        kenpei?: string | number
-        youseki?: string | number
-        bouka?: string
-      }
-    }
-    const p = feat.properties ?? {}
+  const categoryName = (p.use_area_ja ?? '').trim()
+  const category = (VALID_ZONING.includes(categoryName as ZoningCategory)
+    ? categoryName
+    : 'unknown') as ZoningCategory
 
-    const categoryName = (p.youto ?? '').trim()
-    const category = (VALID_ZONING.includes(categoryName as ZoningCategory)
-      ? categoryName
-      : 'unknown') as ZoningCategory
+  // 「80%」→ 80, 「500%」→ 500
+  const bcr = parseFloat((p.u_building_coverage_ratio_ja ?? '').replace(/[^0-9.]/g, ''))
+  const far = parseFloat((p.u_floor_area_ratio_ja ?? '').replace(/[^0-9.]/g, ''))
 
-    const bcr = typeof p.kenpei === 'number' ? p.kenpei : parseFloat(String(p.kenpei ?? ''))
-    const far = typeof p.youseki === 'number' ? p.youseki : parseFloat(String(p.youseki ?? ''))
-
-    const boukaStr = (p.bouka ?? '').toString()
-    const fireZone = boukaStr.includes('準防火') ? 'semi_fire'
-                   : boukaStr.includes('防火')    ? 'fire'
-                   : 'none'
-
-    return {
-      category,
-      buildingCoverageRatio: isNaN(bcr) ? undefined : bcr,
-      floorAreaRatio:        isNaN(far) ? undefined : far,
-      fireZone,
-    }
-  } catch (e) {
-    console.error('[Reinfolib] getZoning failed:', e)
-    return null
+  return {
+    category,
+    buildingCoverageRatio: isFinite(bcr) ? bcr : undefined,
+    floorAreaRatio:        isFinite(far) ? far : undefined,
+    fireZone: 'none', // XKT002 には防火地域情報なし
   }
 }
 
@@ -314,63 +274,71 @@ export interface OfficialLandPrice {
 export async function getOfficialLandPrice(
   lat: number,
   lng: number,
-  radiusKm: number = 1.0,
 ): Promise<OfficialLandPrice | null> {
-  try {
-    // XPT002: 地価公示・地価調査のポイント API
-    const url = new URL(`${BASE_URL}/XPT002`)
-    url.searchParams.set('lat', String(lat))
-    url.searchParams.set('lng', String(lng))
-    url.searchParams.set('radius', String(radiusKm * 1000))
-    url.searchParams.set('limit', '10')
+  // XPT002: 地価公示・地価調査のポイント API（zoom 13-15、year は前年=最新）
+  type LandFeature = {
+    geometry?: { coordinates?: [number, number] }
+    properties?: Record<string, unknown>
+  }
+  const lastYear = String(new Date().getFullYear() - 1)
+  const data = await fetchReinfolibTile<{ features?: LandFeature[] }>(
+    'XPT002', lat, lng, 13,
+    { year: lastYear },
+    2592000, // 30日キャッシュ
+  )
+  if (data == null) return null
+  const features = data.features ?? []
+  if (features.length === 0) return null
 
-    const res = await fetch(url.toString(), {
-      headers: headers(),
-      next: { revalidate: 2592000 }, // 30日（地価公示は年1回更新）
+  // 最も近い地点を選ぶ
+  const nearest = features
+    .map(f => {
+      const coords = f.geometry?.coordinates
+      if (!coords || coords.length < 2) return null
+      const [flng, flat] = coords
+      const dist = haversineMeters(lat, lng, flat, flng)
+      return { feature: f, dist }
     })
+    .filter((x): x is { feature: LandFeature; dist: number } => x !== null)
+    .sort((a, b) => a.dist - b.dist)[0]
 
-    if (!res.ok) {
-      console.error('[Reinfolib] land price error:', res.status)
-      return null
-    }
+  if (!nearest) return null
 
-    const data = await res.json()
-    const features = data?.features ?? []
-    if (features.length === 0) return null
+  const p = nearest.feature.properties ?? {}
+  // 実 properties:
+  //   u_current_years_price_ja: '1,030,000(円/㎡)'  ← 当年公示地価
+  //   last_years_price: 968000                       ← 前年公示地価（純数値）
+  //   target_year_name_ja: '令和6年1月1日'
+  //   use_category_name_ja: '住宅地'
+  //   nearest_station_name_ja: '中目黒'
+  //   u_road_distance_to_nearest_station_name_ja: '550m'
+  const priceStr = String(p['u_current_years_price_ja'] ?? '')
+  const priceParsed = parseFloat(priceStr.replace(/[^0-9.]/g, ''))
+  const price = isFinite(priceParsed) && priceParsed > 0
+    ? priceParsed
+    : Number(p['last_years_price'] ?? 0)
+  if (!price || price <= 0) return null
 
-    // 最も近い地点を選ぶ
-    type LandFeature = {
-      geometry?: { coordinates?: [number, number] }
-      properties?: Record<string, unknown>
-    }
-    const nearest = (features as LandFeature[])
-      .map(f => {
-        const coords = f.geometry?.coordinates
-        if (!coords || coords.length < 2) return null
-        const [flng, flat] = coords
-        const dist = haversineMeters(lat, lng, flat, flng)
-        return { feature: f, dist }
-      })
-      .filter((x): x is { feature: LandFeature; dist: number } => x !== null)
-      .sort((a, b) => a.dist - b.dist)[0]
+  // 「令和6年1月1日」→ 2024 / 「平成31年」→ 2019
+  const yearStr = String(p['target_year_name_ja'] ?? '')
+  let year = new Date().getFullYear()
+  const reiwa = yearStr.match(/令和(\d+)/)
+  const heisei = yearStr.match(/平成(\d+)/)
+  const seireki = yearStr.match(/(\d{4})年/)
+  if (reiwa)        year = 2018 + parseInt(reiwa[1], 10)
+  else if (heisei)  year = 1988 + parseInt(heisei[1], 10)
+  else if (seireki) year = parseInt(seireki[1], 10)
 
-    if (!nearest) return null
+  const distRaw = String(p['u_road_distance_to_nearest_station_name_ja'] ?? '')
+  const distNum = parseFloat(distRaw.replace(/[^0-9.]/g, ''))
 
-    const p = nearest.feature.properties ?? {}
-    const price = Number(p['価格'] ?? p['価格（円/㎡）'] ?? p['pricePerSqm'] ?? 0)
-    if (price <= 0) return null
-
-    return {
-      pricePerSqm: price,
-      year: Number(p['年'] ?? p['基準年'] ?? new Date().getFullYear()),
-      useCategory:        String(p['用途'] ?? p['利用区分'] ?? ''),
-      nearestStation:     p['最寄駅'] ? String(p['最寄駅']) : undefined,
-      distanceToStationM: p['駅距離'] ? Number(p['駅距離']) : undefined,
-      distanceToSiteM:    Math.round(nearest.dist),
-    }
-  } catch (e) {
-    console.error('[Reinfolib] getOfficialLandPrice failed:', e)
-    return null
+  return {
+    pricePerSqm: price,
+    year,
+    useCategory:        String(p['use_category_name_ja'] ?? p['usage_category_name_ja'] ?? ''),
+    nearestStation:     p['nearest_station_name_ja'] ? String(p['nearest_station_name_ja']) : undefined,
+    distanceToStationM: isFinite(distNum) ? distNum : undefined,
+    distanceToSiteM:    Math.round(nearest.dist),
   }
 }
 
