@@ -1,4 +1,5 @@
 import type { PropertyData } from '../../../shared/types'
+import { extractStructure, parseFeatures } from './featuresHelper'
 
 /**
  * 楽待 物件ページから情報を抽出する
@@ -144,6 +145,25 @@ export function parseRakumachi(): PropertyData | null {
       }
     })
 
+    // ── 構造 / 間取り / 設備 ────────────────────────────────────────────────
+    const findByLabel = (regex: RegExp): string => {
+      let v = ''
+      ;[...document.querySelectorAll('th, dt, .label')].forEach(el => {
+        const label = el.textContent?.trim() ?? ''
+        if (regex.test(label) && !v) {
+          v = (el.nextElementSibling as HTMLElement)?.textContent?.trim() ?? ''
+        }
+      })
+      return v
+    }
+    const structure = extractStructure(findByLabel(/構造|建物構造/)) || undefined
+    const layout = findByLabel(/間取り|間取/) || undefined
+    const equipmentText = [
+      findByLabel(/設備/),
+      findByLabel(/その他|特記事項|備考/),
+    ].filter(Boolean).join('\n')
+    const features = parseFeatures(equipmentText)
+
     return {
       url: window.location.href,
       platform: 'rakumachi',
@@ -153,8 +173,11 @@ export function parseRakumachi(): PropertyData | null {
       area,
       age,
       floor,
+      structure,
+      layout,
       managementFee,
       transport: transport.filter(Boolean).slice(0, 3),
+      features,
       rawData: grossYield !== undefined ? { grossYield } : undefined,
     }
   } catch (e) {

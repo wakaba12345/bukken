@@ -1,4 +1,20 @@
 import type { PropertyData } from '../../../shared/types'
+import { extractStructure, parseFeatures } from './featuresHelper'
+
+/**
+ * athome のラベル・値ペアを取得するヘルパー（th/dt 構造、tableMap 化して効率化）
+ */
+function buildAthomeMap(): Map<string, string> {
+  const m = new Map<string, string>()
+  document.querySelectorAll('th, dt').forEach(el => {
+    const label = el.textContent?.trim()
+    if (!label) return
+    const next = el.nextElementSibling as HTMLElement | null
+    if (!next) return
+    if (!m.has(label)) m.set(label, next.textContent?.trim() ?? '')
+  })
+  return m
+}
 
 /**
  * athome 物件ページから情報を抽出する
@@ -78,6 +94,26 @@ export function parseAthome(): PropertyData | null {
       }
     })
 
+    // ── 構造 / 間取り / 設備 ────────────────────────────────────────────────
+    const m = buildAthomeMap()
+    const findKey = (...keywords: string[]): string => {
+      for (const [label, value] of m) {
+        if (keywords.some(k => label.includes(k))) return value
+      }
+      return ''
+    }
+    const structure = extractStructure(findKey('構造', '建物構造')) || undefined
+    const layout = findKey('間取り', '間取') || undefined
+    const equipmentText = [
+      findKey('設備'),
+      findKey('その他', 'その他特記'),
+      findKey('特記事項'),
+    ].filter(Boolean).join('\n')
+    const features = parseFeatures(equipmentText)
+
+    // ── 階数 ────────────────────────────────────────────────────────────────
+    const floor = findKey('所在階', '階建') || undefined
+
     return {
       url: window.location.href,
       platform: 'athome',
@@ -86,8 +122,12 @@ export function parseAthome(): PropertyData | null {
       price,
       area,
       age,
+      floor,
+      structure,
+      layout,
       managementFee,
       transport,
+      features,
     }
   } catch (e) {
     console.error('[Bukken.io] athome parse error:', e)

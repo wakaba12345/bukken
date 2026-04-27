@@ -1,4 +1,5 @@
 import type { PropertyData } from '../../../shared/types'
+import { extractStructure, parseFeatures } from './featuresHelper'
 
 /**
  * SUUMO 物件ページから情報を抽出する
@@ -78,6 +79,20 @@ export function parseSuumo(): PropertyData | null {
     // ── 階数 ────────────────────────────────────────────────────────────────
     const floor = findByIncludes('所在階', '階建', '階') || undefined
 
+    // ── 構造・間取り ────────────────────────────────────────────────────────
+    const structureRaw = findByIncludes('構造', '構造・階建て') || ''
+    const structure = extractStructure(structureRaw) || undefined
+    const layout = get('間取り') || undefined
+
+    // ── 設備（features 抽出） ───────────────────────────────────────────────
+    // SUUMO は「設備」「その他」「その他特記事項」など複数欄位に散る。全部結合して解析。
+    const equipmentText = [
+      findByIncludes('設備'),
+      findByIncludes('その他', 'その他特記'),
+      findByIncludes('特記事項'),
+    ].filter(Boolean).join('\n')
+    const features = parseFeatures(equipmentText)
+
     return {
       url: window.location.href,
       platform: 'suumo',
@@ -87,8 +102,11 @@ export function parseSuumo(): PropertyData | null {
       area,
       age,
       floor,
+      structure,
+      layout,
       managementFee,
       transport,
+      features,
     }
   } catch (e) {
     console.error('[Bukken.io] SUUMO parse error:', e)
