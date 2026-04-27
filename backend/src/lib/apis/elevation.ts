@@ -55,3 +55,78 @@ export function describeFloodRiskByElevation(meters: number): string {
   if (meters < 20) return '海抜10〜20m（水害リスク中〜低）'
   return `海抜${Math.round(meters)}m（水害リスク低）`
 }
+
+// ─── 坡度（傾斜）解析 ──────────────────────────────────────────────────────
+
+export type SlopeRating = 'flat' | 'gentle' | 'moderate' | 'steep'
+
+export interface SlopeAnalysis {
+  center_m: number
+  north_m: number
+  east_m: number
+  south_m: number
+  west_m: number
+  max_delta_m: number       // 5 点間の最大高低差
+  rating: SlopeRating
+  note: string
+}
+
+/**
+ * 物件中心 + 50m 四方向（N/E/S/W）の標高を取得し、坂道の急峻度を判定。
+ * 急傾斜は年配・子育て世帯・自転車利用者に敬遠され、賃料天井・入居率に影響する。
+ *
+ * Rating（max-min 高低差ベース）:
+ *   flat:     < 3m   平坦地、生活支障なし
+ *   gentle:   3-8m   緩斜面、日常に大きな問題なし
+ *   moderate: 8-15m  中傾斜、年配・自転車利用者に負担
+ *   steep:    > 15m  急傾斜、強く敬遠（搬入・引越しに支障）
+ */
+export async function getSlopeAnalysis(
+  lat: number,
+  lng: number,
+): Promise<SlopeAnalysis | null> {
+  // 緯度 1 度 ≒ 111km、北緯 35 度の経度 1 度 ≒ 91km
+  // → 50m 相当のオフセット = 約 0.00045 度
+  const dLat = 0.00045
+  const dLng = 0.00055 // 経度方向は若干広め（cos 補正）
+
+  const [center, north, east, south, west] = await Promise.all([
+    getElevation(lat, lng),
+    getElevation(lat + dLat, lng),
+    getElevation(lat, lng + dLng),
+    getElevation(lat - dLat, lng),
+    getElevation(lat, lng - dLng),
+  ])
+
+  if (!center || !north || !east || !south || !west) return null
+
+  const elevs = [center.meters, north.meters, east.meters, south.meters, west.meters]
+  const maxDelta = Math.max(...elevs) - Math.min(...elevs)
+
+  let rating: SlopeRating
+  let note: string
+  if (maxDelta < 3) {
+    rating = 'flat'
+    note = `平坦地（半径 50m 高低差 ${maxDelta.toFixed(1)}m）。徒歩・自転車利用に支障なし。`
+  } else if (maxDelta < 8) {
+    rating = 'gentle'
+    note = `緩斜面（高低差 ${maxDelta.toFixed(1)}m）。日常生活に大きな支障なし。`
+  } else if (maxDelta < 15) {
+    rating = 'moderate'
+    note = `中程度の斜面（高低差 ${maxDelta.toFixed(1)}m）。年配テナント・自転車利用者に若干の負担。`
+  } else {
+    rating = 'steep'
+    note = `急斜面（高低差 ${maxDelta.toFixed(1)}m）。年配・子育て世帯に強く敬遠される。重い買物・引越し作業に支障、賃料天井・入居率に影響。`
+  }
+
+  return {
+    center_m: center.meters,
+    north_m: north.meters,
+    east_m: east.meters,
+    south_m: south.meters,
+    west_m: west.meters,
+    max_delta_m: Math.round(maxDelta * 10) / 10,
+    rating,
+    note,
+  }
+}

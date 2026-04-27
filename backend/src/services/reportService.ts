@@ -7,16 +7,19 @@ import type {
   AreaMarket,
   ZoningInfo,
   OfficialLandPrice,
+  AmenitiesCheck,
+  SlopeAnalysis,
 } from 'shared/types'
 import { computeAreaHealthScore } from './areaHealthScoreService'
 import { analyzePropertyVision } from './visionAnalysisService'
 import { checkCemeteryNearby } from './cemeteryCheckService'
+import { checkNearbyAmenities } from './amenitiesCheckService'
 import { geocode } from '../lib/apis/geocode'
 import { getEarthquakeRisk } from '../lib/apis/jshis'
 import { getDisasterRisk, getZoning, getOfficialLandPrice } from '../lib/apis/reinfolib'
 import { getAreaMarket } from '../lib/apis/fudosandb'
 import { getNearbyTransactions, type AreaTransactionResult } from '../lib/apis/landprice'
-import { getElevation, describeFloodRiskByElevation, type ElevationResult } from '../lib/apis/elevation'
+import { getElevation, describeFloodRiskByElevation, getSlopeAnalysis, type ElevationResult } from '../lib/apis/elevation'
 import {
   getAreaDemographics, type AreaDemographics,
   getPopulationMovement, type PopulationMovement,
@@ -54,7 +57,7 @@ export async function generateReport(
   const isDeep = type === 'deep_report'
 
   // ── 並列でデータ取得 ────────────────────────────────────────────────────
-  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes, householdRes, visionRes, cemeteryRes] = await Promise.allSettled([
+  const [disasterRisk, areaMarket, landTransactions, zoningRes, landPriceRes, elevationRes, demographicsRes, popMoveRes, constructionRes, vacancyRes, foreignResRes, employmentRes, householdRes, visionRes, cemeteryRes, amenitiesRes, slopeRes] = await Promise.allSettled([
     lat && lng ? fetchDisasterRisk(lat, lng) : Promise.resolve(undefined),
     lat && lng ? getAreaMarket(property.address, lat, lng) : Promise.resolve(undefined),
     getNearbyTransactions(property.address),
@@ -75,6 +78,8 @@ export async function generateReport(
     // プラン変更で再分析せず開放可能。
     lat && lng ? analyzePropertyVision({ lat, lng }) : Promise.resolve(null),
     lat && lng ? checkCemeteryNearby({ lat, lng }) : Promise.resolve(null),
+    lat && lng ? checkNearbyAmenities({ lat, lng }) : Promise.resolve(null),
+    lat && lng ? getSlopeAnalysis(lat, lng) : Promise.resolve(null),
   ])
 
   const disaster     = disasterRisk.status === 'fulfilled'     ? disasterRisk.value     : undefined
@@ -92,10 +97,13 @@ export async function generateReport(
   const household    = householdRes.status === 'fulfilled'     ? (householdRes.value ?? undefined) : undefined
   const vision       = visionRes.status === 'fulfilled'        ? (visionRes.value ?? undefined) : undefined
   const cemetery     = cemeteryRes.status === 'fulfilled'      ? (cemeteryRes.value ?? undefined) : undefined
+  const amenities    = amenitiesRes.status === 'fulfilled'     ? (amenitiesRes.value ?? undefined) : undefined
+  const slope        = slopeRes.status === 'fulfilled'         ? (slopeRes.value ?? undefined) : undefined
 
   if (process.env.NODE_ENV === 'development') {
     if (visionRes.status === 'rejected') console.warn('[reportService] vision failed:', visionRes.reason)
     if (cemeteryRes.status === 'rejected') console.warn('[reportService] cemetery failed:', cemeteryRes.reason)
+    if (amenitiesRes.status === 'rejected') console.warn('[reportService] amenities failed:', amenitiesRes.reason)
   }
 
   // ── 地域健康度スコア集計（Phase 1.6、prompt には注入しない） ─────────────
@@ -107,7 +115,7 @@ export async function generateReport(
   }
 
   // ── Claude API でレポート生成 ────────────────────────────────────────────
-  const aiAnalysis = await generateAiAnalysis(property, type, disaster, market, transactions, zoning, landPrice, elevation, demographics, popMove, construction, vacancy, foreignRes, employment, household)
+  const aiAnalysis = await generateAiAnalysis(property, type, disaster, market, transactions, zoning, landPrice, elevation, demographics, popMove, construction, vacancy, foreignRes, employment, household, amenities, slope)
 
   // 成約データを areaMarket のフォールバックとして使用
   const mergedMarket: AreaMarket | undefined = market ?? (transactions && transactions.count > 0 ? {
@@ -127,6 +135,8 @@ export async function generateReport(
     officialLandPrice: landPrice,
     visionAnalysis: vision,
     cemeteryCheck: cemetery,
+    amenitiesCheck: amenities,
+    slope,
     areaHealthScore: areaHealthScore ?? undefined,
     aiAnalysis,
     generatedAt: new Date().toISOString(),
@@ -177,6 +187,8 @@ async function generateAiAnalysis(
   foreignRes?: ForeignResidents,
   employment?: EmploymentIncome,
   household?: HouseholdSpending,
+  amenities?: AmenitiesCheck,
+  slope?: SlopeAnalysis,
 ) {
   const isQuick = type === 'quick_summary'
   const isDeep  = type === 'deep_report'
@@ -252,6 +264,21 @@ ${elevation ? `Elevation (国土地理院):
 - Altitude: ${elevation.meters.toFixed(1)}m above sea level
 - Qualitative assessment: ${describeFloodRiskByElevation(elevation.meters)}
 - Data source: ${elevation.source}` : ''}
+
+${slope ? `Terrain slope (国土地理院、半径 50m 4 方向の標高):
+- Center: ${slope.center_m.toFixed(1)}m
+- N/E/S/W: ${slope.north_m.toFixed(1)} / ${slope.east_m.toFixed(1)} / ${slope.south_m.toFixed(1)} / ${slope.west_m.toFixed(1)}m
+- Max delta within 50m: ${slope.max_delta_m}m
+- Rating: ${slope.rating}
+- Note: ${slope.note}
+(Note: rating が moderate 以上は cons に挙げ、特に steep の場合は年配・子育て世帯への影響を明示。flat の場合は pros として「平坦地で生活動線良好」を述べる。)` : ''}
+
+${amenities ? `Lifestyle amenities (Google Places、徒歩圏内の生活利便施設):
+- Convenience stores within 500m: ${amenities.convenience_stores.length}（最近${amenities.nearest_convenience_m != null ? ` ${amenities.nearest_convenience_m}m` : 'なし'}）
+- Supermarkets within 800m: ${amenities.supermarkets.length}（最近${amenities.nearest_supermarket_m != null ? ` ${amenities.nearest_supermarket_m}m` : 'なし'}）
+- Rating: ${amenities.rating}
+- Note: ${amenities.rating_note}
+(Note: 単身・共働き世帯はコンビニ徒歩 5 分・スーパー徒歩 10 分を強く重視。rating が limited / poor の場合は cons に明示すること。excellent の場合は pros として賃料設定の上振れ余地を述べること。)` : ''}
 
 ${demographics ? `Area demographics (e-Stat ${demographics.source}, ${demographics.year}):
 - Area: ${demographics.areaName}

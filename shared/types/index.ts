@@ -144,6 +144,40 @@ export interface VisionAnalysis {
   coordinates: { lat: number; lng: number }
 }
 
+export type SlopeRating = 'flat' | 'gentle' | 'moderate' | 'steep'
+
+export interface SlopeAnalysis {
+  center_m: number
+  north_m: number
+  east_m: number
+  south_m: number
+  west_m: number
+  max_delta_m: number
+  rating: SlopeRating
+  note: string
+}
+
+export interface NearbyAmenity {
+  type: 'convenience_store' | 'supermarket'
+  name: string
+  address?: string
+  distance_m: number
+  lat: number
+  lng: number
+}
+
+export type AmenitiesRating = 'excellent' | 'good' | 'limited' | 'poor'
+
+export interface AmenitiesCheck {
+  convenience_stores: NearbyAmenity[]   // 半径 500m 以内
+  supermarkets: NearbyAmenity[]         // 半径 800m 以内
+  nearest_convenience_m: number | null
+  nearest_supermarket_m: number | null
+  rating: AmenitiesRating
+  rating_note: string
+  coordinates: { lat: number; lng: number }
+}
+
 export interface CemeteryNearby {
   name: string
   address?: string
@@ -179,8 +213,10 @@ export interface ReportContent {
   areaMarket?: AreaMarket
   zoning?: ZoningInfo                        // deep_report のみ
   officialLandPrice?: OfficialLandPrice      // deep_report のみ
-  visionAnalysis?: VisionAnalysis            // deep_report のみ（Street View 外観気場分析）
-  cemeteryCheck?: CemeteryCheck              // deep_report のみ（半径 200m 墓地検索）
+  visionAnalysis?: VisionAnalysis            // Street View 外観気場分析
+  cemeteryCheck?: CemeteryCheck              // 半径 200m 墓地検索
+  amenitiesCheck?: AmenitiesCheck            // 便利商店・超市の充実度（賃貸需要に直接影響）
+  slope?: SlopeAnalysis                       // 坡度（傾斜）解析（年配・子育てテナント影響）
   areaHealthScore?: AreaHealthScore          // e-Stat 多源集計
   aiAnalysis: {
     summary: string
