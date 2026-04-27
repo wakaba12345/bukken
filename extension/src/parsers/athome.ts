@@ -1,5 +1,5 @@
 import type { PropertyData } from '../../../shared/types'
-import { extractStructure, parseFeatures } from './featuresHelper'
+import { extractStructure, parseFeatures, parseSeismicRetrofit } from './featuresHelper'
 
 /**
  * athome のラベル・値ペアを取得するヘルパー（th/dt 構造、tableMap 化して効率化）
@@ -110,6 +110,7 @@ export function parseAthome(): PropertyData | null {
       findKey('特記事項'),
     ].filter(Boolean).join('\n')
     const features = parseFeatures(equipmentText)
+    const seismicRetrofit = parseSeismicRetrofit(equipmentText)
 
     // ── 階数 ────────────────────────────────────────────────────────────────
     const floor = findKey('所在階', '階建') || undefined
@@ -125,6 +126,7 @@ export function parseAthome(): PropertyData | null {
       floor,
       structure,
       layout,
+      seismicRetrofit,
       managementFee,
       transport,
       features,

@@ -17,8 +17,9 @@ export interface PropertyData {
   floor?: string         // 階数（例: "3F / 10F"）
   managementFee?: number // 管理費（円/月）
   transport?: string[]   // 交通アクセス
-  structure?: string     // 構造（RC造、SRC造、鉄骨造、木造 等）
-  layout?: string        // 間取り（例: "1K", "2LDK"）
+  structure?: string         // 構造（RC造、SRC造、鉄骨造、木造 等）
+  layout?: string            // 間取り（例: "1K", "2LDK"）
+  seismicRetrofit?: boolean  // 旧耐震物件で耐震補強工事済か（true=補強済、undefined=不明）
   features?: PropertyFeatures
   rawData?: Record<string, unknown>
 }

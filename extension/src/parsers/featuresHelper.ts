@@ -47,3 +47,15 @@ export function parseFeatures(text: string): PropertyFeatures | undefined {
 
   return Object.keys(f).length > 0 ? f : undefined
 }
+
+/**
+ * 設備・特記事項テキストから「耐震補強済」かどうかを判定。
+ * 旧耐震物件（築 44 年以上）で補強済かは融資審査・買主敬遠度に大きく影響する。
+ *
+ * 明示的に補強済と書かれていれば true、不明なら undefined。
+ */
+export function parseSeismicRetrofit(text: string): boolean | undefined {
+  if (!text) return undefined
+  if (/耐震補強(工事)?済|補強工事済|耐震改修済|耐震診断済|新耐震(基準)?適合/.test(text)) return true
+  return undefined
+}

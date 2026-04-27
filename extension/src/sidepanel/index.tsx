@@ -622,15 +622,71 @@ function PropertySummary({ property, t }: {
       <p style={styles.propAddress}>{property.address}</p>
       <div style={styles.propMeta}>
         <span style={styles.propPrice}>¥{property.price.toLocaleString()}</span>
-        {property.area && <span style={styles.propTag}>{property.area}㎡</span>}
+        {property.area != null && property.area > 0 && (
+          <span style={styles.propTag}>{property.area}㎡</span>
+        )}
+        {property.layout && (
+          <span style={styles.propTag}>{property.layout}</span>
+        )}
         {property.age !== undefined && (
           <span style={styles.propTag}>{t(`築${property.age}年`, `屋齡 ${property.age} 年`)}</span>
         )}
+        {property.age !== undefined && (
+          <SeismicTag age={property.age} retrofit={property.seismicRetrofit} t={t} />
+        )}
+        {property.structure && <StructureTag structure={property.structure} />}
       </div>
       {property.transport?.[0] && (
         <p style={styles.propTransport}>🚉 {property.transport[0]}</p>
       )}
     </div>
+  )
+}
+
+/**
+ * 新耐震 / 旧耐震・補強済 / 旧耐震・要確認 を色付きバッジで表示
+ * 1981/06 以降築 = 新耐震基準。築年数 < 44 を新耐震と推定（境界保守）
+ */
+function SeismicTag({ age, retrofit, t }: {
+  age: number
+  retrofit?: boolean
+  t: (ja: string, zh: string) => string
+}) {
+  if (age < 44) {
+    return (
+      <span style={{ ...styles.propTag, background: "#0F6E56", color: "#fff", border: "none" }}>
+        {t("新耐震", "新耐震")}
+      </span>
+    )
+  }
+  if (retrofit) {
+    return (
+      <span style={{ ...styles.propTag, background: "#D97706", color: "#fff", border: "none" }}>
+        {t("旧耐震・補強済", "舊耐震・已補強")}
+      </span>
+    )
+  }
+  return (
+    <span style={{ ...styles.propTag, background: "#B91C1C", color: "#fff", border: "none" }}>
+      {t("旧耐震・要確認", "舊耐震・要確認")}
+    </span>
+  )
+}
+
+/**
+ * 構造（RC/SRC/鉄骨造/木造 等）バッジ。木造は警告色
+ */
+function StructureTag({ structure }: { structure: string }) {
+  const isWooden = /木造/.test(structure)
+  return (
+    <span style={{
+      ...styles.propTag,
+      background: isWooden ? "#B91C1C" : "#185FA5",
+      color: "#fff",
+      border: "none",
+    }}>
+      {structure}
+    </span>
   )
 }
 

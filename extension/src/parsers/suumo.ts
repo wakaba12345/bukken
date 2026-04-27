@@ -1,5 +1,5 @@
 import type { PropertyData } from '../../../shared/types'
-import { extractStructure, parseFeatures } from './featuresHelper'
+import { extractStructure, parseFeatures, parseSeismicRetrofit } from './featuresHelper'
 
 /**
  * SUUMO 物件ページから情報を抽出する
@@ -92,6 +92,7 @@ export function parseSuumo(): PropertyData | null {
       findByIncludes('特記事項'),
     ].filter(Boolean).join('\n')
     const features = parseFeatures(equipmentText)
+    const seismicRetrofit = parseSeismicRetrofit(equipmentText)
 
     return {
       url: window.location.href,
@@ -104,6 +105,7 @@ export function parseSuumo(): PropertyData | null {
       floor,
       structure,
       layout,
+      seismicRetrofit,
       managementFee,
       transport,
       features,

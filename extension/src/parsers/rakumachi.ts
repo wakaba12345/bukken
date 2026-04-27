@@ -1,5 +1,5 @@
 import type { PropertyData } from '../../../shared/types'
-import { extractStructure, parseFeatures } from './featuresHelper'
+import { extractStructure, parseFeatures, parseSeismicRetrofit } from './featuresHelper'
 
 /**
  * 楽待 物件ページから情報を抽出する
@@ -163,6 +163,7 @@ export function parseRakumachi(): PropertyData | null {
       findByLabel(/その他|特記事項|備考/),
     ].filter(Boolean).join('\n')
     const features = parseFeatures(equipmentText)
+    const seismicRetrofit = parseSeismicRetrofit(equipmentText)
 
     return {
       url: window.location.href,
@@ -175,6 +176,7 @@ export function parseRakumachi(): PropertyData | null {
       floor,
       structure,
       layout,
+      seismicRetrofit,
       managementFee,
       transport: transport.filter(Boolean).slice(0, 3),
       features,
